@@ -7,6 +7,10 @@ import HypercubeRamsey.S05.Centres_sol_s05_centres_height
 import HypercubeRamsey.S05.Centres_sol_s05_centres_low
 import HypercubeRamsey.S05.Centres_sol_s05_centres_counts
 import HypercubeRamsey.S05.Centres_sol_s05_k1
+import HypercubeRamsey.S05.Centres_sol_s05_k1_rows
+import HypercubeRamsey.S05.Centres_sol_s05_k1_records
+import HypercubeRamsey.S05.Centres_sol_s05_k1_height
+import HypercubeRamsey.S05.Centres_sol_s05_k1_mass
 
 /-!
 # D5.6–D5.8, L5.1j, L5.1g/k rows, L5.1l(3): centers, height choices and the odd rows
@@ -1129,6 +1133,216 @@ theorem lowTable_exists : ∀ (cL cH : Pre15 → ℝ), (∀ x, 0 < cL x ∧ 0 < 
       X.p = p → (∀ x : CubeVertex n, ∀ ℓ ∈ X.g.typeKeys (X.p.J n) x, (X.g.key x).1 ∈ binList5 ℓ.coarse) →
         ∀ L : X.CentreLayer5, X.LowLayer5 L Ckey (cL p.pre1) (cH p.pre1) →
           Nonempty (LowTable5 X L Cloc) := by
+  intro cL cH hc Ckey
+  have hrecord : ∀ (n N : ℕ) (E : Fin N → Fin N → Prop) (G : Colour)
+      (X : Setup5 γ K' χ n N E G) (ht : X.HeightChoice5)
+      (elig : X.KeyHist → X.CΩ ht → ht.hp.EligMap) (H : X.KeyHist) (ω : X.CΩ ht)
+      (R : ℕ) (y : OddRole5 n), X.LocalValidAt ht elig H ω R y →
+        ∃ μ : X.St.Site → ht.hp.Loc,
+          X.RecordFrom (X.actualRecordAt (elig H) H ω R y) y μ ∧
+            (Lane_sol_s05_k1.recordIds X (X.actualRecordAt (elig H) H ω R y)).card ≤ X.p.T n := by
+    intro n N E G X ht elig H ω R y hv
+    rcases hv with ⟨hb, hstep1, hsel, hcounts, hT, hhits, hheavy, hraw, hpath, hgate, hstep3⟩
+    let r := X.actualRecordAt (elig H) H ω R y
+    let sel := fun a : EvenRole5 n => X.selAt (elig H) ω R a
+    let fallback : ht.hp.Loc := (fun _ => false, ⟨0, Nat.zero_lt_succ _⟩)
+    let μ : X.St.Site → ht.hp.Loc := fun s =>
+      (ht.hp.selectionAt (X.sites ht) (pos ω) (act ω) (elig H ω) (tie ω) R (X.St.oneHot s)).getD fallback
+    have hkey : r.1 = X.g.roleKey (X.p.J n) y.1 := rfl
+    have hchoose (a : EvenRole5 n) (ha : a ∈ evenNbrs y) : sel a = some (μ (X.St.stateOf a.1)) := by
+      change sel a = some ((sel a).getD fallback)
+      have hs : (sel a).isSome := hsel a ha
+      cases he : sel a with
+      | none => simp only [he, Option.isSome_none, Bool.false_eq_true] at hs
+      | some l => simp only [he, Option.getD_some]
+    have ho : r.2.1 = (evenNbrs y).image (fun a => (μ (X.St.stateOf a.1), X.g.evenType (X.p.J n) a.1)) := by
+      change (evenNbrs y).biUnion (fun a => match sel a with
+        | some l => {(l, X.g.evenType (X.p.J n) a.1)} | none => ∅) = _
+      ext c
+      simp only [Finset.mem_biUnion, Finset.mem_image]
+      constructor
+      · rintro ⟨a, ha, hc⟩
+        have he : c = (μ (X.St.stateOf a.1), X.g.evenType (X.p.J n) a.1) := by
+          simpa only [hchoose a ha, Finset.mem_singleton] using hc
+        exact ⟨a, ha, he.symm⟩
+      · rintro ⟨a, ha, rfl⟩
+        exact ⟨a, ha, by simp only [hchoose a ha, Finset.mem_singleton]⟩
+    let pred := fun a : EvenRole5 n =>
+      r.1 ∈ (X.g.evenType (X.p.J n) a.1).2.1 ∧
+        r.1.isLeft = (X.g.evenType (X.p.J n) a.1).2.2.isSome
+    have href : r.2.2.1 = ((evenNbrs y).filter pred).image
+        (fun a => (μ (X.St.stateOf a.1), X.g.evenType (X.p.J n) a.1, X.g.optionalKey (X.p.J n) a.1)) := by
+      change (evenNbrs y).biUnion (fun a => match sel a with
+        | some l => if pred a then {(l, X.g.evenType (X.p.J n) a.1, X.g.optionalKey (X.p.J n) a.1)} else ∅
+        | none => ∅) = _
+      ext c
+      simp only [Finset.mem_biUnion, Finset.mem_image, Finset.mem_filter]
+      constructor
+      · rintro ⟨a, ha, hc⟩
+        by_cases hp : pred a
+        · have he : c = (μ (X.St.stateOf a.1), X.g.evenType (X.p.J n) a.1,
+              X.g.optionalKey (X.p.J n) a.1) := by
+            simpa only [hchoose a ha, ite_eq_left hp, Finset.mem_singleton] using hc
+          exact ⟨a, ⟨ha, hp⟩, he.symm⟩
+        · simp only [hchoose a ha, ite_eq_right hp] at hc
+          simp at hc
+      · rintro ⟨a, ⟨ha, hp⟩, rfl⟩
+        exact ⟨a, ha, by simp only [hchoose a ha, ite_eq_left hp, Finset.mem_singleton]⟩
+    have hm : (match r.2.2.2 with
+        | none => r.1.isLeft → ∀ a ∈ evenNbrs y, (X.g.evenType (X.p.J n) a.1).2.2.isSome
+        | some (l, K, M) => r.1.isLeft ∧ ∃ a ∈ evenNbrs y,
+          K = X.g.evenType (X.p.J n) a.1 ∧ K.2.2 = none ∧
+            l = μ (X.St.stateOf a.1) ∧ X.LegitRef K M) := by
+      by_cases hy : X.g.severity y.1 ≤ X.p.J n
+      · let k : X.LowIdx := (X.g.key y.1, X.g.sign y.1, ⟨X.g.severity y.1, Nat.lt_succ_of_le hy⟩)
+        have hrole : X.g.roleKey (X.p.J n) y.1 = .inl k := by
+          simp only [ChunkGeometry5.roleKey, dite_eq_left hy, k]
+        have hl : r.1.isLeft := by simp only [hkey, hrole, Sum.isLeft_inl]
+        by_cases hex : ∃ a ∈ evenNbrs y, (X.g.evenType (X.p.J n) a.1).2.2 = none ∧ (sel a).isSome
+        · let a := Classical.choose hex
+          have ha := Classical.choose_spec hex
+          let l := μ (X.St.stateOf a.1)
+          let K := X.g.evenType (X.p.J n) a.1
+          let M := X.firstK (X.hitSet (arraysOf ω) (l, K) (X.lowCol H.2 k)) (X.p.usedBlocks n)
+          have he : r.2.2.2 = some (l, K, M) := by
+            simp only [r, actualRecordAt, hrole]
+            rw [dite_eq_left hex]
+            change (match sel a with
+              | some l' => some (l', K, X.firstK (X.hitSet (arraysOf ω) (l', K) (X.lowCol H.2 k))
+                  (X.p.usedBlocks n)) | none => none) = _
+            rw [hchoose a ha.1]
+          rw [he]
+          exact ⟨hl, a, ha.1, rfl, ha.2.1, rfl,
+            Lane_sol_s05_k1.mask_legit_of_gate X H r (arraysOf ω) hl hgate (l, K) M he ha.2.1⟩
+        · have he : r.2.2.2 = none := by
+            simp only [r, actualRecordAt, hrole]
+            rw [dite_eq_right hex]
+          rw [he]
+          intro _ a ha
+          cases hK : (X.g.evenType (X.p.J n) a.1).2.2 with
+          | none => exact (hex ⟨a, ha, hK, hsel a ha⟩).elim
+          | some j => simp only [hK, Option.isSome_some]
+      · have he : r.2.2.2 = none := by
+          simp only [r, actualRecordAt, ChunkGeometry5.roleKey, dite_eq_right hy]
+        rw [he]
+        have hl : ¬ r.1.isLeft := by
+          simp only [hkey, ChunkGeometry5.roleKey, dite_eq_right hy, Sum.isLeft_inr, Bool.false_eq_true, not_false_eq_true]
+        exact fun h => (hl h).elim
+    have hids : Lane_sol_s05_k1.recordIds X r = (evenNbrs y).image (fun a => μ (X.St.stateOf a.1)) := by
+      simp only [Lane_sol_s05_k1.recordIds, ho, Finset.image_image]
+      ext l
+      simp only [Finset.mem_image, Function.comp_apply]
+    have hchoices : ((evenNbrs y).image (fun a => μ (X.St.stateOf a.1))).image some =
+        (evenNbrs y).image sel := by
+      rw [Finset.image_image]
+      apply Finset.image_congr
+      intro a ha
+      exact (hchoose a ha).symm
+    have hsome : Function.Injective (some : ht.hp.Loc → Option ht.hp.Loc) := by
+      intro a b h
+      exact Option.some.inj h
+    refine ⟨μ, ?_, ?_⟩
+    · change X.RecordFrom r y μ
+      refine ⟨hkey.symm, ?_, ?_, ?_⟩
+      · rw [ho]
+        ext c
+        simp only [Finset.mem_image]
+      · rw [href]
+        ext c
+        simp only [Finset.mem_image, Finset.mem_filter, pred, r, actualRecordAt]
+      · cases he : r.2.2.2 with
+        | none =>
+          simp only [he] at hm ⊢
+          exact hm
+        | some c =>
+          rcases c with ⟨l, K, M⟩
+          simp only [he] at hm ⊢
+          obtain ⟨hl, a, ha, hK, hhigh, hi, hlegit⟩ := hm
+          exact ⟨hl, a, ha, hK, hhigh, hi, hlegit⟩
+    · rw [hids, ← Finset.card_image_of_injective _ hsome, hchoices]
+      exact hT
+  have hselected : ∀ (n N : ℕ) (E : Fin N → Fin N → Prop) (G : Colour)
+      (X : Setup5 γ K' χ n N E G) (L : X.CentreLayer5) (H : X.KeyHist)
+      (ω : X.CΩ L.ht) (R : ℕ) (a : EvenRole5 n) (l : L.ht.hp.Loc),
+      X.selAt (L.elig H) ω R a = some l →
+        pos ω l = true ∧ _root_.hammingDist l.1 (X.siteOf a) ≤ L.ht.hp.r := by
+    intro n N E G X L H ω R a l hs
+    obtain ⟨j, hj⟩ := Lane_sol_s05_k1.selectionAt_mem L.ht.hp (X.sites L.ht)
+      (pos ω) (act ω) (L.elig H ω) (X.siteOf a) R (tie ω) l hs
+    obtain ⟨hP, hlev, hd⟩ := L.elig_shape H ω (X.siteOf a) j l hj
+    have he : _root_.hammingDist l.1 (X.siteOf a) = HypercubeRamsey.hammingDist l.1 (X.siteOf a) := by
+      unfold _root_.hammingDist HypercubeRamsey.hammingDist
+      apply congrArg Finset.card
+      ext i
+      simp only [Finset.mem_filter]
+    exact ⟨hP, he.symm ▸ hd⟩
+  have hpool : ∀ (n N : ℕ) (E : Fin N → Fin N → Prop) (G : Colour)
+      (X : Setup5 γ K' χ n N E G) (L : X.CentreLayer5) (H : X.KeyHist)
+      (ω : X.CΩ L.ht) (R : ℕ) (y : OddRole5 n),
+      Lane_sol_s05_k1.recordIds X (X.actualRecordAt (L.elig H) H ω R y) ⊆
+        (evenNbrs y).biUnion (fun a => Finset.univ.filter (fun l : L.ht.hp.Loc =>
+          pos ω l = true ∧ _root_.hammingDist l.1 (X.siteOf a) ≤ L.ht.hp.r)) := by
+    intro n N E G X L H ω R y l hl
+    obtain ⟨c, hc, he⟩ := Finset.mem_image.mp hl
+    subst l
+    simp only [actualRecordAt, Finset.mem_biUnion] at hc
+    obtain ⟨a, ha, hc⟩ := hc
+    cases hs : X.selAt (L.elig H) ω R a with
+    | none => simp only [hs] at hc; simp at hc
+    | some l =>
+      have he : c = (l, X.g.evenType (X.p.J n) a.1) := by
+        simpa only [hs, Finset.mem_singleton] using hc
+      have hd := hselected n N E G X L H ω R a l hs
+      apply Finset.mem_biUnion.mpr
+      refine ⟨a, ha, Finset.mem_filter.mpr ⟨Finset.mem_univ _, ?_⟩⟩
+      simpa only [he] using hd
+  have hcover : ∀ (n N : ℕ) (E : Fin N → Fin N → Prop) (G : Colour)
+      (X : Setup5 γ K' χ n N E G) (L : X.CentreLayer5) (H : X.KeyHist)
+      (ω : X.CΩ L.ht) (R : ℕ) (y : OddRole5 n), X.LocalValidAt L.ht L.elig H ω R y →
+      X.actualRecordAt (L.elig H) H ω R y ∈ Lane_sol_s05_k1.potentialRecords X y
+        ((evenNbrs y).biUnion (fun a => Finset.univ.filter (fun l : L.ht.hp.Loc =>
+          pos ω l = true ∧ _root_.hammingDist l.1 (X.siteOf a) ≤ L.ht.hp.r))) := by
+    intro n N E G X L H ω R y hv
+    obtain ⟨μ, hr, hT⟩ := hrecord n N E G X L.ht L.elig H ω R y hv
+    exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, ⟨μ, hr⟩,
+      hpool n N E G X L H ω R y, hT⟩
+  have hpool_count : ∀ (n N : ℕ) (E : Fin N → Fin N → Prop) (G : Colour)
+      (X : Setup5 γ K' χ n N E G) (L : X.CentreLayer5) (H : X.KeyHist)
+      (ω : X.CΩ L.ht) (R : ℕ) (y : OddRole5 n), X.LocalValidAt L.ht L.elig H ω R y →
+      (((evenNbrs y).biUnion (fun a => Finset.univ.filter (fun l : L.ht.hp.Loc =>
+        pos ω l = true ∧ _root_.hammingDist l.1 (X.siteOf a) ≤ L.ht.hp.r))).card : ℝ) ≤
+          (n : ℝ) * (L.ht.hp.H + 1 : ℕ) * (2 * L.ht.hp.lam) := by
+    intro n N E G X L H ω R y hv
+    have hdist (u v : CubeVertex L.ht.hp.d) :
+        HypercubeRamsey.hammingDist u v = _root_.hammingDist u v := by
+      unfold HypercubeRamsey.hammingDist _root_.hammingDist
+      apply congrArg Finset.card
+      ext i
+      simp only [Finset.mem_filter]
+    have hcount (a : EvenRole5 n) (ha : a ∈ evenNbrs y) (j : Fin (L.ht.hp.H + 1)) :
+        ((Finset.univ.filter (fun u : CubeVertex L.ht.hp.d =>
+          pos ω (u, j) = true ∧ _root_.hammingDist u (X.siteOf a) ≤ L.ht.hp.r)).card : ℝ) ≤ 2 * L.ht.hp.lam := by
+      have h := hv.2.2.2.1 a ha j
+      convert h using 1
+      congr 1
+    let S := fun a : EvenRole5 n => Finset.univ.filter (fun l : L.ht.hp.Loc =>
+      pos ω l = true ∧ _root_.hammingDist l.1 (X.siteOf a) ≤ L.ht.hp.r)
+    have hS (a : EvenRole5 n) (ha : a ∈ evenNbrs y) :
+        ((S a).card : ℝ) ≤ (L.ht.hp.H + 1 : ℕ) * (2 * L.ht.hp.lam) :=
+      Lane_sol_s05_k1.location_pool_card_le L.ht.hp (pos ω) (X.siteOf a) _ (hcount a ha)
+    have hlam : 0 ≤ L.ht.hp.lam := by
+      change (0 : ℝ) ≤ (n : ℝ) ^ (10 : ℝ)
+      positivity
+    calc
+      _ ≤ ((∑ a ∈ evenNbrs y, (S a).card : ℕ) : ℝ) := by
+        exact_mod_cast Finset.card_biUnion_le
+      _ = ∑ a ∈ evenNbrs y, ((S a).card : ℝ) := Nat.cast_sum _ _
+      _ ≤ ∑ _a ∈ evenNbrs y, (L.ht.hp.H + 1 : ℕ) * (2 * L.ht.hp.lam) :=
+        Finset.sum_le_sum hS
+      _ = ((evenNbrs y).card : ℝ) * ((L.ht.hp.H + 1 : ℕ) * (2 * L.ht.hp.lam)) := by simp
+      _ ≤ (n : ℝ) * ((L.ht.hp.H + 1 : ℕ) * (2 * L.ht.hp.lam)) :=
+        mul_le_mul_of_nonneg_right (Nat.cast_le.mpr (Lane_sol_s05_hist1b.evenNbrs_card_le y)) (by positivity)
+      _ = _ := by ring
   sorry
 
 /-- SUB-LEMMA K2 (05:987–1001): at a good history the long-row mean exceeds the short-row mean

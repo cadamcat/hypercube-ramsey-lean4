@@ -623,10 +623,8 @@ theorem bin_local_output (κ : CConsts) (hκ : κ.Admissible) (T : Stage) (c : �
 
 /-! ### Label stage -/
 
-/-- Sub-lemma (exact singleton marginals of the independent label kernel).  A draft proof is
-`independent_label_singleton` in `ClusterLabelReference_sol_s15_c2.lean` at commit `6f5f82d`
-(removed from the tree: its `independent_label_E_eq_odd_E` timed out), followed by `rfl` through
-`oddLabelLaw`/`groupLabelLaw`.  Only coordinate `wordAtOdd b` of the word product matters. -/
+/-- Exact singleton marginals of the independent label kernel: only coordinate `wordAtOdd b` of
+the word product law matters. -/
 theorem independent_label_singleton_U {κ : CConsts} {T : Stage} {k : ℕ}
     (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
     (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
@@ -636,7 +634,17 @@ theorem independent_label_singleton_U {κ : CConsts} {T : Stage} {k : ℕ}
       (fun I => clusterLabelFromInternal (hPT := hPT) hm I b = y) =
     (clusterSolver PT hPT hm (patchAt PT hPT b.1)).U (clusterGroupIndexAt PT hPT hm b).2
       (historyOnSlice W (clusterSliceAt PT hPT b.1)) (B (clusterGroupIndexAt PT hPT hm b)) y := by
-  sorry
+  classical
+  rw [Lane_sol_s15_transfer.pr_eq_E_indicator, Lane_sol_s15_transfer.independent_label_E_eq_word_E]
+  have h := Lane_sol_s15_transfer.E_pi_coord (Lane_sol_s15_transfer.wordLabelLaw PT hPT hm W B)
+    (Lane_sol_s15_transfer.wordAtOdd PT hPT hm b)
+    (fun z => @ite ℝ (z = y) (Classical.propDecidable _) 1 0)
+  refine h.trans ?_
+  unfold FinLaw.E
+  dsimp only
+  rw [Finset.sum_eq_single y (fun z _ hz => by rw [if_neg hz, mul_zero])
+    (fun h => absurd (Finset.mem_univ y) h), if_pos rfl, mul_one]
+  rfl
 
 /-- Sub-lemma (high-large-bin mode, 15:155): the clock lemma with `B = 5`, applied to the
 individual laws given successful bins (column sums `≤ θ0` by `hgood`, superpolynomially small

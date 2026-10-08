@@ -2,6 +2,7 @@ import HypercubeRamsey.S18.Defs
 import HypercubeRamsey.S18.Nodes_q_s18_n3
 import HypercubeRamsey.S18.Nodes_sol_fix_surv
 import HypercubeRamsey.S18.Nodes_sol_s18_2lm
+import HypercubeRamsey.S18.Nodes_sol_s18_2lm_finish
 import HypercubeRamsey.S18.Nodes_sol_fix_outsupp
 import HypercubeRamsey.S18.Nodes_sol_s18_n1_caps
 import HypercubeRamsey.S18.Nodes_sol_s18_n1_sketch
@@ -640,7 +641,7 @@ theorem L18_2l {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
   refine ⟨κ.xs / 8, ?_, ?_, ?_⟩
   · exact div_pos hκ.xs_rng.1 (by norm_num)
   · nlinarith [hκ.xs_rng.1]
-  · sorry
+  · exact Lane_sol_s18_2lm.eventual_stop_facts hκ T hDisc
 
 /-- L18.2m, 18:617–628. An integrated tilted deviation estimate, not the
 final unconditioned prefix-failure estimate. -/

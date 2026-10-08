@@ -203,7 +203,9 @@ possible records of the deleted references at same-mode neighbours and uniform a
 hence independent of the primitive values `z`; on the gate the sublikelihood costs at most `e^{a₆ k n}` against
 it.  The gate requires legitimate long-rule selection of `c` with its subset, valid neighbouring rows, legal
 eligible sets on the long consultation domain, the prior-heavy bound and the high budget; it holds for the
-actual reference on the global success event and is local to radius `r + slack`. -/
+actual reference on the global success event and is local to radius `r + 2·slack`: neighbouring validity and
+rows read radius `r + slack` around each star neighbour (05:861–887), whose image lies within `slack` of the
+role's site (`CentreLayer5.slack_nbr`, 05:309–312). -/
 structure EvenSetup5 {L : X.CentreLayer5} {cL cH : ℝ} (LR : X.LowRows5 L cL cH) (HR : X.HighRows5 L) where
   gate : X.KeyHist → EvenRole5 n → X.CRef L.ht → X.CΩ L.ht → (OddRole5 n → X.OddOut) → Prop
   refQ : X.KeyHist → EvenRole5 n → X.CRef L.ht → X.CΩ L.ht → OddRole5 n → FinProb X.OddOut
@@ -228,14 +230,102 @@ structure EvenSetup5 {L : X.CentreLayer5} {cL cH : ℝ} (LR : X.LowRows5 L cL cH
   gate_success : ∀ (H : X.KeyHist) (ω : X.CΩ L.ht) (O : OddRole5 n → X.OddOut), L.success H ω →
     X.BudgetOK HR H ω O → ∀ (v : EvenRole5 n) (c : X.CRef L.ht),
       X.evenRefOf (L.elig H) H ω v = some c → gate H v c ω O
+  /-- The gate reads the centers within `r + 2·slack` of the role's site (05:861–887, 1150–1158). -/
   gate_local : ∀ (H : X.KeyHist) (v : EvenRole5 n) (c : X.CRef L.ht) (O : OddRole5 n → X.OddOut),
     FinProb.DependsOn (fun ω : X.CΩ L.ht => gate H v c ω O)
-      (X.scopeBall (h := L.ht) v.1 (L.ht.hp.r + L.slack + 8))
+      (X.scopeBall (h := L.ht) v.1 (L.ht.hp.r + 2 * L.slack))
   gate_outputs : ∀ (H : X.KeyHist) (v : EvenRole5 n) (c : X.CRef L.ht) (ω : X.CΩ L.ht)
     (O O' : OddRole5 n → X.OddOut), (∀ b ∈ star v, O b = O' b) → (gate H v c ω O ↔ gate H v c ω O')
+  /-- The reference reads the star neighbours' retained data, within `r + 2·slack` of the role's site
+  (05:1103–1135, 861–887). -/
   refQ_local : ∀ (H : X.KeyHist) (v : EvenRole5 n) (c : X.CRef L.ht) (b : OddRole5 n),
     FinProb.DependsOn (fun ω : X.CΩ L.ht => refQ H v c ω b)
-      (X.scopeBall (h := L.ht) v.1 (L.ht.hp.r + L.slack + 8))
+      (X.scopeBall (h := L.ht) v.1 (L.ht.hp.r + 2 * L.slack))
+
+namespace Lane_opus_s05_even
+
+/-! ### L5.1n setup sub-lemmas (lane opus-s05-even) -/
+
+/-- The local gate `E` at `(v, c)` (05:1150–1158): `c` is the long-rule reference of `v`, the star rows are
+valid, the eligible sets are legal on the long consultation domain, the prior-heavy bound holds and the
+high budget of `v` holds. -/
+def evenGate {L : X.CentreLayer5} (HR : X.HighRows5 L) (H : X.KeyHist) (v : EvenRole5 n) (c : X.CRef L.ht)
+    (ω : X.CΩ L.ht) (O : OddRole5 n → X.OddOut) : Prop :=
+  X.evenRefOf (L.elig H) H ω v = some c ∧ (∀ b ∈ star v, L.valid H ω b) ∧
+    L.ht.hp.Legal (pos ω) (L.elig H ω) (L.ht.hp.domBall (X.sites L.ht) (X.siteOf v) L.ht.hp.Rlong) ∧
+    (X.heavyCount H ω v c : ℝ) ≤ X.p.nu0 * (X.refLen (X.g.evenType (X.p.J n) v.1) c.2 : ℝ) ∧
+    ∑ b, X.budgetCost HR H ω v b (O b) ≤ X.p.a 5 * (X.kStarLen : ℝ) * n
+
+/-- Every even role has an odd neighbour once `n ≥ 1` (flip one coordinate). -/
+theorem star_nonempty (v : EvenRole5 n) (hn : 1 ≤ n) : (star v).Nonempty := by
+  obtain ⟨b, hb⟩ := oddAdjSet5_nonempty v (by omega)
+  refine ⟨b, ?_⟩
+  simp only [Setup5.star, oddAdjSet5, Finset.mem_filter, Finset.mem_univ, true_and] at hb ⊢
+  exact hb
+
+/-- The gate holds at the actual reference on the success event with the imposed budgets (05:1150–1158). -/
+theorem evenGate_of_success {L : X.CentreLayer5} (HR : X.HighRows5 L) (H : X.KeyHist) (ω : X.CΩ L.ht)
+    (O : OddRole5 n → X.OddOut) (hs : L.success H ω) (hB : X.BudgetOK HR H ω O) (v : EvenRole5 n)
+    (c : X.CRef L.ht) (hc : X.evenRefOf (L.elig H) H ω v = some c) (hn : 1 ≤ n) :
+    evenGate X HR H v c ω O := by
+  obtain ⟨b, hb⟩ := star_nonempty v hn
+  refine ⟨hc, fun b' _ => L.success_valid H ω hs b', ?_, ?_, hB v⟩
+  · intro u hu j
+    exact L.success_legal H ω hs u (Finset.mem_filter.mp hu).1 j
+  · have hvb : v ∈ evenNbrs b :=
+      Finset.mem_filter.mpr ⟨Finset.mem_univ _, (Finset.mem_filter.mp hb).2⟩
+    exact L.valid_heavy H ω b (L.success_valid H ω hs b) v hvb c hc
+
+/-- The gate reads only the star outputs: high costs vanish off the star. -/
+theorem evenGate_outputs {L : X.CentreLayer5} (HR : X.HighRows5 L) (H : X.KeyHist) (v : EvenRole5 n)
+    (c : X.CRef L.ht) (ω : X.CΩ L.ht) (O O' : OddRole5 n → X.OddOut) (hO : ∀ b ∈ star v, O b = O' b) :
+    evenGate X HR H v c ω O ↔ evenGate X HR H v c ω O' := by
+  have hsum : ∑ b, X.budgetCost HR H ω v b (O b) = ∑ b, X.budgetCost HR H ω v b (O' b) := by
+    apply Finset.sum_congr rfl
+    intro b _
+    by_cases hb : b ∈ star v
+    · rw [hO b hb]
+    · have hadj : ¬ (cube n).Adj v.1 b.1 := fun h => hb (Finset.mem_filter.mpr ⟨Finset.mem_univ _, h⟩)
+      simp [budgetCost, hadj]
+  unfold evenGate
+  rw [hsum]
+
+/-- SUB-LEMMA S2 (05:861–887, 1150–1158, the repaired locality): the gate reads the centers within
+`r + 2·slack` of the role's site. Selection and legality read within `Rlong + r + 16 ≤ r + slack` of the site
+(`selLong_local`, `elig_local`); on the gate the reference location is within `r` of it (heavy count); each
+star neighbour's validity, actual record and high row read `scopeBall b (r + slack)` (`valid_local`,
+`highRecord_local`, `row_local`), inside `scopeBall v (r + 2·slack)` by `slack_nbr` and the triangle
+inequality. -/
+theorem evenGate_local {L : X.CentreLayer5} (HR : X.HighRows5 L) (H : X.KeyHist) (v : EvenRole5 n)
+    (c : X.CRef L.ht) (O : OddRole5 n → X.OddOut) :
+    FinProb.DependsOn (fun ω : X.CΩ L.ht => evenGate X HR H v c ω O)
+      (X.scopeBall (h := L.ht) v.1 (L.ht.hp.r + 2 * L.slack)) := by
+  sorry
+
+/-- SUB-LEMMA S3 (05:1103–1164, the product reference): a reference `Q` independent of the reference values,
+local to `r + 2·slack`, dominating the star sublikelihood on the gate with cost `e^{a₆ k n}`. Construction:
+the deleted low/high mixtures over actual configurations (sol helpers `Even_setup_laws`, invariance and
+locality), pointwise domination (`Even_setup_dom`) and configuration counts (`Even_setup_counts`); costs:
+low neighbours `e^{a₄ k}` with the reserved record margin, high neighbours the gate budget `a₅ k n` plus
+`O(T log n) = o(k_*)`, opposite-mode neighbours `O(D_L + D_H)` each and `o(n^{.4})` of them. -/
+theorem even_refQ : ∃ R : ParamReq5, ∀ p : Params5 γ K' χ, R.Holds p → ∃ n₀ : ℕ, ∀ n ≥ n₀,
+    ∀ (N : ℕ) (E : Fin N → Fin N → Prop) (G : Colour) (X : Setup5 γ K' χ n N E G), X.p = p →
+      ∀ (L : X.CentreLayer5) (cL cH : ℝ) (LR : X.LowRows5 L cL cH) (HR : X.HighRows5 L),
+        ∃ refQ : X.KeyHist → EvenRole5 n → X.CRef L.ht → X.CΩ L.ht → OddRole5 n → FinProb X.OddOut,
+          (∀ (H : X.KeyHist) (v : EvenRole5 n) (c : X.CRef L.ht) (ω : X.CΩ L.ht)
+            (z : X.RefVal v c.2) (b : OddRole5 n),
+            refQ H v c (replaceRef (X := X) (h := L.ht) ω v c z) b = refQ H v c ω b) ∧
+          (∀ (H : X.KeyHist) (v : EvenRole5 n) (c : X.CRef L.ht) (b : OddRole5 n),
+            FinProb.DependsOn (fun ω : X.CΩ L.ht => refQ H v c ω b)
+              (X.scopeBall (h := L.ht) v.1 (L.ht.hp.r + 2 * L.slack))) ∧
+          ∀ (H : X.KeyHist) (v : EvenRole5 n) (c : X.CRef L.ht) (ω : X.CΩ L.ht)
+            (O : OddRole5 n → X.OddOut), evenGate X HR H v c ω O →
+            ∏ b ∈ star v, X.oddRow LR HR H ω b (O b) ≤
+              Real.exp (X.p.a 6 * (X.refLen (X.g.evenType (X.p.J n) v.1) c.2 : ℝ) * n) *
+                ∏ b ∈ star v, (refQ H v c ω b).w (O b) := by
+  sorry
+
+end Lane_opus_s05_even
 
 /-- L5.1n, reference part (05:1103–1164): the gate and the product reference exist.  `Q` uses only retained
 primitive data (the deleted components do not read `z`; extracted subsets are recomputed); the likelihood
@@ -246,7 +336,30 @@ theorem L5_1n_setup : ∃ R : ParamReq5, ∀ p : Params5 γ K' χ, R.Holds p →
     ∀ (N : ℕ) (E : Fin N → Fin N → Prop) (G : Colour) (X : Setup5 γ K' χ n N E G), X.p = p →
       ∀ (L : X.CentreLayer5) (cL cH : ℝ) (LR : X.LowRows5 L cL cH) (HR : X.HighRows5 L),
         Nonempty (X.EvenSetup5 LR HR) := by
-  sorry
+  classical
+  obtain ⟨RQ, hQ⟩ := Lane_opus_s05_even.even_refQ (γ := γ) (K' := K') (χ := χ)
+  refine ⟨RQ, ?_⟩
+  intro p hp
+  obtain ⟨n₀, hn₀⟩ := hQ p hp
+  refine ⟨max n₀ 1, ?_⟩
+  intro n hn N E G X hXp L cL cH LR HR
+  obtain ⟨refQ, hinv, hloc, hcost⟩ :=
+    hn₀ n (le_trans (le_max_left _ _) hn) N E G X hXp L cL cH LR HR
+  have hn1 : 1 ≤ n := le_trans (le_max_right _ _) hn
+  exact ⟨{
+    gate := fun H v c ω O => Lane_opus_s05_even.evenGate X HR H v c ω O
+    refQ := refQ
+    refQ_invariant := hinv
+    cost_bound := hcost
+    gate_select := fun _ _ _ _ _ hg => hg.1
+    gate_valid := fun _ _ _ _ _ hg => hg.2.1
+    gate_legal := fun _ _ _ _ _ hg => hg.2.2.1
+    gate_heavy := fun _ _ _ _ _ hg => hg.2.2.2.1
+    gate_success := fun H ω O hs hB v c hc =>
+      Lane_opus_s05_even.evenGate_of_success X HR H ω O hs hB v c hc hn1
+    gate_local := fun H v c O => Lane_opus_s05_even.evenGate_local X HR H v c O
+    gate_outputs := fun H v c ω O O' hO => Lane_opus_s05_even.evenGate_outputs X HR H v c ω O O' hO
+    refQ_local := hloc }⟩
 
 /-! ### The even row (05:1176–1207) -/
 
@@ -754,9 +867,10 @@ namespace Lane_opus_s05_even
 `L5_1o` is `scatteredMoments_union_labels` (L3.6c) with `Z_v(x) = N p_v(x)`, `K = 2`, near sets of residual
 radius `evenSep`, the cap of `L5_1n_rows`, and the inputs below. -/
 
-/-- The residual separation radius of even rows: twice `r + slack + 9`, a residual radius containing the gate
-scope `r + slack + 8` and every odd neighbour's consultation scope `r + slack` (05:1255–1275). -/
-def evenSep (L : X.CentreLayer5) : ℕ := 2 * (L.ht.hp.r + L.slack + 9)
+/-- The residual separation radius of even rows: twice `r + 2·slack`, a residual radius containing the gate
+scope `r + 2·slack` and every odd neighbour's consultation scope `r + slack` shifted by one residual
+coordinate (05:1255–1275). -/
+def evenSep (L : X.CentreLayer5) : ℕ := 2 * (L.ht.hp.r + 2 * L.slack)
 
 /-- `Z_v(x) = N p_v(x)` on the joint space of centers and odd outputs (05:1252). -/
 def evenZ (ES : X.EvenSetup5 LR HR) (H : X.KeyHist) (v : EvenRole5 n) (x : Fin N)
@@ -870,11 +984,12 @@ def evenW (ES : X.EvenSetup5 LR HR) (H : X.KeyHist) (v : EvenRole5 n) (x : Fin N
   (FinProb.pi fun b => X.oddRowFP LR HR H ω b).expect fun O => evenZ X ES H v x (ω, O)
 
 /-- SUB-LEMMA D5 (05:1271–1275): the product-row mean reads the centers in the residual scope
-`r + slack + 9` (gate and reference scopes `r + slack + 8`; star validity and rows `r + slack` around
-neighbours one residual coordinate away; replacing the reference values stays inside the scope). -/
+`r + 2·slack` (gate and reference scopes `r + 2·slack`; star validity and rows `r + slack` around
+neighbours one residual coordinate away, `slack ≥ 1`; replacing the reference values stays inside the
+scope). -/
 theorem evenW_local (ES : X.EvenSetup5 LR HR) (H : X.KeyHist) (v : EvenRole5 n) (x : Fin N)
     (ω ω' : X.CΩ L.ht)
-    (hω : ∀ l ∈ Lane_sol_s05_even.residualScope X (h := L.ht) v.1 (L.ht.hp.r + L.slack + 9), ω l = ω' l) :
+    (hω : ∀ l ∈ Lane_sol_s05_even.residualScope X (h := L.ht) v.1 (L.ht.hp.r + 2 * L.slack), ω l = ω' l) :
     evenW X ES H v x ω = evenW X ES H v x ω' := by
   sorry
 
@@ -897,7 +1012,7 @@ theorem evenW_mean : ∃ R : ParamReq5, ∃ Cd : Pre65 → ℝ, (∀ q, 0 ≤ Cd
 rows, the retained success event integrates `∏ Z_{s_i}(x)` to at most `2^m ∏ d_{s_i}`. Split as D1
 (`clock_expect_le`, the `(1+ε)` comparison on the `≤ n²` star outputs), D2 (`evenRow` reads only the star
 outputs, `gate_outputs`), D3 (separated stars are disjoint, so the product-row mean factors), D5 (the
-product-row mean of `Z_v` reads the centers in the residual scope `r + slack + 9`: `gate_local`,
+product-row mean of `Z_v` reads the centers in the residual scope `r + 2·slack`: `gate_local`,
 `refQ_local`, `valid_local`, `row_local`, long-rule selection locality), D4 (disjoint residual scopes
 factor under the product center law, `pi_expect_prod_disjoint`), and D6, the comparison mean
 `E[product-row mean of Z_v(x)] ≤ d_v` (posterior cancellation, forced-center selection bounds, `P̄_K ≤ B_K/N`
@@ -1003,13 +1118,14 @@ theorem even_joint_moments : ∃ R : ParamReq5, ∃ Cd : Pre65 → ℝ, (∀ q, 
           rw [evenRow_outputs_local X ES H ω (s i) x O O' hO])
         (hpair (fun i => star (s i)) fun i j hji => star_disjoint_of_far X (s j) (s i) (by
           have := hfar i j hji
+          have hsl := L.slack_large
           unfold evenSep at this
           omega))
     exact h1.trans (le_of_eq (congrArg (fun t => (1 + ε) * t) h2))
   have hcentre : (X.centreLaw L.ht H).expect (fun ω => ∏ i ∈ Finset.univ, evenW X ES H (s i) x ω) =
       ∏ i ∈ Finset.univ, (X.centreLaw L.ht H).expect (evenW X ES H (s i) x) :=
     Lane_sol_s05_h5l.pi_expect_prod_disjoint _ Finset.univ
-      (fun i => Lane_sol_s05_even.residualScope X (h := L.ht) (s i).1 (L.ht.hp.r + L.slack + 9))
+      (fun i => Lane_sol_s05_even.residualScope X (h := L.ht) (s i).1 (L.ht.hp.r + 2 * L.slack))
       (fun i ω => evenW X ES H (s i) x ω)
       (fun i _ => by
         intro ω ω' hω
@@ -1082,7 +1198,7 @@ end Lane_opus_s05_even
 `d_v = O(B_{K(v)} exp(O(k_* 1_{j(v) > J})))` — cancellation of the posterior denominator, the forced-center height
 bounds (`3/λ` at level zero, `e^{-n^c}` above), presence sums `λ` per level, unselected marginal `P̄_K ≤ B_K/N`
 and `exp(O(k_*))` high subsets — with average `O(1)` over even roles; separated rows (residual distance
-`> 2(r + slack + 8)`) factor after the clock comparison on at most `n²` outputs; scattered moments with cap
+`> 2(r + 2·slack)`) factor after the clock comparison on at most `n²` outputs; scattered moments with cap
 `O(e^{τ₁ n})` and repeat cost `n e^{-n(log 2 - H(2ρ)) + o(n)} e^{τ₁ n} = o(1)` and the label union, with
 `|A|/N ≤ 1/C₀`, bound every even column sum by one with probability `1 - o(1)`. -/
 theorem L5_1o : ∃ R : ParamReq5, ∀ p : Params5 γ K' χ, R.Holds p →

@@ -3,12 +3,15 @@
  "packagesDir": ".lake/packages",
  "packages": [
   {
-   "type": "path",
+   "url": "https://github.com/openai/math",
+   "type": "git",
+   "subDir": "lean",
    "scope": "",
+   "rev": "adc7f1241b42e322a6451854ab7e4b4c146bf78a",
    "name": "OAI",
    "manifestFile": "lake-manifest.json",
+   "inputRev": "adc7f1241b42e322a6451854ab7e4b4c146bf78a",
    "inherited": false,
-   "dir": "../oai/lean",
    "configFile": "lakefile.lean"
   },
   {
@@ -517,5 +520,6 @@
   }
  ],
  "name": "HypercubeRamsey",
- "lakeDir": ".lake"
+ "lakeDir": ".lake",
+ "fixedToolchain": false
 }

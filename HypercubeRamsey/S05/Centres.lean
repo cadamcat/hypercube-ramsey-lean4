@@ -825,7 +825,122 @@ theorem markElig_sound (H : X.KeyHist) (ω : X.CΩ ht) (R : ℕ) (y : OddRole5 n
     (hT : ((X.St.neighbors (X.St.stateOf y.1)).image μ).card ≤ X.p.T n)
     (hsel : ∀ a ∈ evenNbrs y, X.selAt (markElig X ht H) ω R a = some (μ (X.St.stateOf a.1))) :
     ¬ X.step3FailOn H (X.actualRecordAt (markElig X ht H) H ω R y) (arraysOf ω) := by
-  sorry
+  have choose_congr : ∀ {α : Sort _} {p q : α → Prop} (hpq : p = q) (hp : ∃ x, p x) (hq : ∃ x, q x),
+      Classical.choose hp = Classical.choose hq := by
+    intro α p q hpq hp hq; subst hpq; rfl
+  have recordOf_congr : ∀ (A : X.ArraysOn ht.hp.Loc) (σ₁ σ₂ : EvenRole5 n → Option ht.hp.Loc) (y : OddRole5 n),
+      (∀ a ∈ evenNbrs y, σ₁ a = σ₂ a) → recordOf X ht H A σ₁ y = recordOf X ht H A σ₂ y := by
+    intro A σ₁ σ₂ y h
+    have hobs : (evenNbrs y).biUnion (fun a => match σ₁ a with
+        | some l => {(l, X.g.evenType (X.p.J n) a.1)}
+        | none => ∅) =
+      (evenNbrs y).biUnion (fun a => match σ₂ a with
+        | some l => {(l, X.g.evenType (X.p.J n) a.1)}
+        | none => ∅) := by
+      apply Finset.biUnion_congr rfl
+      intro a ha
+      rw [h a ha]
+    have hrefs : (evenNbrs y).biUnion (fun a => match σ₁ a with
+        | some l => if X.g.roleKey (X.p.J n) y.1 ∈ (X.g.evenType (X.p.J n) a.1).2.1 ∧
+              (X.g.roleKey (X.p.J n) y.1).isLeft = (X.g.evenType (X.p.J n) a.1).2.2.isSome then
+            {(l, X.g.evenType (X.p.J n) a.1, X.g.optionalKey (X.p.J n) a.1)} else ∅
+        | none => ∅) =
+      (evenNbrs y).biUnion (fun a => match σ₂ a with
+        | some l => if X.g.roleKey (X.p.J n) y.1 ∈ (X.g.evenType (X.p.J n) a.1).2.1 ∧
+              (X.g.roleKey (X.p.J n) y.1).isLeft = (X.g.evenType (X.p.J n) a.1).2.2.isSome then
+            {(l, X.g.evenType (X.p.J n) a.1, X.g.optionalKey (X.p.J n) a.1)} else ∅
+        | none => ∅) := by
+      apply Finset.biUnion_congr rfl
+      intro a ha
+      rw [h a ha]
+    have heq_p : (fun a => a ∈ evenNbrs y ∧ (X.g.evenType (X.p.J n) a.1).2.2 = none ∧ (σ₁ a).isSome) =
+                 (fun a => a ∈ evenNbrs y ∧ (X.g.evenType (X.p.J n) a.1).2.2 = none ∧ (σ₂ a).isSome) := by
+      funext a
+      apply propext
+      constructor
+      · rintro ⟨ha, hnone, hsome⟩; rw [h a ha] at hsome; exact ⟨ha, hnone, hsome⟩
+      · rintro ⟨ha, hnone, hsome⟩; rw [← h a ha] at hsome; exact ⟨ha, hnone, hsome⟩
+    have hcond : (∃ a ∈ evenNbrs y, (X.g.evenType (X.p.J n) a.1).2.2 = none ∧ (σ₁ a).isSome) =
+                 (∃ a ∈ evenNbrs y, (X.g.evenType (X.p.J n) a.1).2.2 = none ∧ (σ₂ a).isSome) :=
+      congrArg Exists heq_p
+    have hmask : (recordOf X ht H A σ₁ y).2.2.2 = (recordOf X ht H A σ₂ y).2.2.2 := by
+      dsimp only [recordOf]
+      rcases (X.g.roleKey (X.p.J n) y.1) with k | _
+      · dsimp only
+        by_cases h₁ : ∃ a ∈ evenNbrs y, (X.g.evenType (X.p.J n) a.1).2.2 = none ∧ (σ₁ a).isSome
+        · have h₂ : ∃ a ∈ evenNbrs y, (X.g.evenType (X.p.J n) a.1).2.2 = none ∧ (σ₂ a).isSome := hcond ▸ h₁
+          rw [dif_pos h₁, dif_pos h₂]
+          have h_eq : Classical.choose h₁ = Classical.choose h₂ := choose_congr heq_p h₁ h₂
+          have ha_mem : Classical.choose h₁ ∈ evenNbrs y := (Classical.choose_spec h₁).1
+          have h_match : σ₁ (Classical.choose h₁) = σ₂ (Classical.choose h₂) := by
+            rw [h_eq, h _ (h_eq ▸ ha_mem)]
+          rw [h_match, h_eq]
+        · have h₂ : ¬ (∃ a ∈ evenNbrs y, (X.g.evenType (X.p.J n) a.1).2.2 = none ∧ (σ₂ a).isSome) := fun h2 => h₁ (hcond.symm ▸ h2)
+          rw [dif_neg h₁, dif_neg h₂]
+      · rfl
+    unfold recordOf
+    dsimp only
+    exact Prod.ext rfl (Prod.ext hobs (Prod.ext hrefs hmask))
+  intro hfail
+  have hrec_eq : X.actualRecordAt (markElig X ht H) H ω R y =
+      recordOf X ht H (arraysOf ω) (fun a => some (μ (X.St.stateOf a.1))) y :=
+    (actualRecordAt_eq X ht (markElig X ht H) H ω R y).trans (recordOf_congr (arraysOf ω) _ _ y hsel)
+  have hfail' : X.step3FailOn H (recordOf X ht H (arraysOf ω) (fun a => some (μ (X.St.stateOf a.1))) y) (arraysOf ω) :=
+    hrec_eq ▸ hfail
+  let b := X.St.stateOf y.1
+  let S := (X.St.neighbors b).image μ
+  have hS : S ∈ failSets X ht H (pos ω) (arraysOf ω) b j := by
+    simp only [failSets, Finset.mem_image, Finset.mem_filter, Finset.mem_univ, true_and]
+    refine ⟨μ, ⟨?_, hT, ⟨y, rfl, hfail'⟩⟩, rfl⟩
+    intro t ht_nbr
+    have h_elig := helig t ht_nbr
+    simp only [markElig, eligOf, Finset.mem_filter] at h_elig
+    have h_prosp := h_elig.1
+    rcases hlev t ht_nbr with hj_eq | hj_eq
+    · apply Finset.mem_union_left
+      rw [hj_eq] at h_prosp
+      exact h_prosp
+    · apply Finset.mem_union_right
+      rw [hj_eq] at h_prosp
+      exact h_prosp
+  have hn : 0 < n := by
+    cases n with
+    | zero =>
+      have heven : IsEvenRole y.1 := by
+        change Even (Finset.univ.filter (fun i : Fin 0 => y.1 i = true)).card
+        rw [Finset.univ_eq_empty, Finset.filter_empty, Finset.card_empty]
+        exact ⟨0, rfl⟩
+      exact (y.2 heven).elim
+    | succ k => exact Nat.succ_pos k
+  let i₀ : Fin n := ⟨0, hn⟩
+  let v := cubeFlip y.1 i₀
+  have hadj : (OAI.HypercubeRamsey.cube n).Adj y.1 v := cubeFlip_adj y.1 i₀
+  have ht_mem : X.St.stateOf v ∈ X.St.neighbors b := by
+    rw [X.St.mem_neighbors]
+    exact ⟨y.1, v, rfl, rfl, hadj⟩
+  have hS_non : S.Nonempty := ⟨μ (X.St.stateOf v), Finset.mem_image.mpr ⟨X.St.stateOf v, ht_mem, rfl⟩⟩
+  have hspec := (Lane_sol_s05_centres.markingFamily_spec (failSets X ht H (pos ω) (arraysOf ω) b j)).2.2 S hS hS_non
+  obtain ⟨l, hl_inter⟩ := hspec
+  have hl_S := (Finset.mem_inter.mp hl_inter).1
+  have hl_mf := (Finset.mem_inter.mp hl_inter).2
+  obtain ⟨t, ht_nbr, rfl⟩ := Finset.mem_image.mp hl_S
+  have h_elig := helig t ht_nbr
+  simp only [markElig, eligOf, Finset.mem_filter] at h_elig
+  have h_not_marks := h_elig.2.2
+  have h_in_marks : μ t ∈ marks X ht H (pos ω) (arraysOf ω) (X.St.oneHot t) ((μ t).2 : ℕ) := by
+    simp only [marks, Finset.mem_filter, and_true]
+    apply Finset.mem_biUnion.mpr
+    refine ⟨b, ?_, ?_⟩
+    · simp only [Finset.mem_filter, Finset.mem_univ, true_and]
+      exact ⟨t, ht_nbr, rfl⟩
+    · apply Finset.mem_biUnion.mpr
+      refine ⟨j, ?_, hl_mf⟩
+      simp only [Finset.mem_filter, Finset.mem_range]
+      refine ⟨Nat.lt_succ_of_le hj, ?_⟩
+      rcases hlev t ht_nbr with h1 | h2
+      · left; exact h1.symm
+      · right; exact h2.symm
+  exact h_not_marks h_in_marks
 
 /-- Ball counts `λ/2 .. 2λ` at every site-level (05:835–838). -/
 def BallsOK (ω : X.CΩ ht) : Prop :=

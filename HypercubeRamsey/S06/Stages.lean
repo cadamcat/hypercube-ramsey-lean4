@@ -3,6 +3,7 @@ import HypercubeRamsey.S03.ConditionalAvoidance
 import HypercubeRamsey.S06.Stages_q_s06_stages
 import HypercubeRamsey.S06.Stages_sol_s06_shapes
 import HypercubeRamsey.S06.Stages_sol_s06_hidden
+import HypercubeRamsey.S06.Stages_opus_coarse
 
 open HypercubeRamsey.Lane_q_s06_stages
 open HypercubeRamsey.Lane_sol_s06_hidden
@@ -1409,24 +1410,33 @@ theorem L6_1h_parent (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     linarith [hcomplement, hbadSmall]
   exact hgoodMass
 
-set_option maxHeartbeats 200000
+set_option maxHeartbeats 1000000
 
 /-- L6.1h (coarse base, 06:488–496): grouped probabilities `o(1)` from stage 1 and Markov (conditional future
 probabilities have the same sign symmetry given the base, so a bin's union runs over shapes), bounded dependency
 degree. -/
 theorem L6_1h_coarse (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.DescCount → X.RateShapes → X.CoarseCert := by
+  have hp₀ : 0 < p₀ := hadm.2.2.1
+  have hα : 0 < α₆ p₀ := lt_min (by norm_num) (by linarith)
+  have hMto := m₆_nat_tendsto_atTop p₀ hp₀
   obtain ⟨n₀, hn₀⟩ := Filter.eventually_atTop.1
     (eventually_coarse_degree_charge_budget.and
-      (eventually_coarse_step1_charge_budget.and (Filter.eventually_ge_atTop 2)))
+      (eventually_coarse_step1_charge_budget.and
+        ((Lane_opus_coarse.eventually_coarse_step2_tail p₀ hp₀).and
+          (Lane_opus_coarse.eventually_coarse_step3_tail.and
+            ((eventually_nat_ceil_rpow_add_two_le_double hα).and
+              ((hMto.eventually eventually_T₆_le_J₆).and
+                ((hMto.eventually (Filter.eventually_ge_atTop (4000 : ℕ))).and
+                  (Filter.eventually_ge_atTop 4))))))))
   refine ⟨n₀, 0, ?_⟩
   intro n N E G M X hLarge hDesc hRate
   intro v hV0
   let charge : ℝ := (n : ℝ) ^ (-(δ₁ / 8))
   let scope : X.Bin → Finset X.Bin := coarseBinScope X
   let adj : X.Bin → X.Bin → Prop := fun i j => i ≠ j ∧ ¬ Disjoint (scope i) (scope j)
-  have hbudget := hn₀ n hLarge.1
-  have hn2 : 2 ≤ n := hbudget.2.2
+  obtain ⟨hDegNum, hStep1Num, hStep2Num, hStep3Num, hCeilNum, hTJNum, hMNum, hn4⟩ := hn₀ n hLarge.1
+  have hn2 : 2 ≤ n := by omega
   have hn1 : 1 < (n : ℝ) := by exact_mod_cast (by omega : 1 < n)
   have hcharge0 : 0 ≤ charge := by dsimp [charge]; positivity
   have hcharge1 : charge < 1 := by
@@ -1492,13 +1502,68 @@ theorem L6_1h_coarse (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
         ∃ h ∈ X.C (X.g.L.key x), ¬ X.Step1OK (v, c) h) ≤ charge / 4 := by
       apply (coarse_step1_group_probability X v i ((n : ℝ) ^ (-(δ₁ / 4)))
         (by positivity) (fun h hh => hV0.1 h hh)).trans
-      exact hbudget.2.1
+      exact hStep1Num
     have hFuture : (X.coarseLaw v).pr (fun c =>
         (∃ x : CubeVertex n, IsEvenRole x ∧ (X.g.L.key x).1 = i ∧
           (n : ℝ) ^ (-(δ₂ * (X.evenType x).u / 8)) < X.rate2Base (v, c) (X.evenType x)) ∨
         ∃ a ∈ X.g.L.oddStates, (X.g.L.stKey a).1 = i ∧
           ∃ D ∈ X.absDescs a, Real.exp (-(9 / 2000) * X.k) < X.rate3Base (v, c) a D) ≤ charge / 4 := by
-      sorry
+      have hn0 : 0 < (n : ℝ) := by linarith
+      have hXm : X.m = m₆ p₀ n := X.g.m_eq
+      have hStep2Tail : 8 * ((X.m : ℝ) + 1) * (n : ℝ) ^ (-(δ₂ / 8)) ≤ charge / 8 := by
+        simpa only [hXm] using hStep2Num
+      have hr2 : (n : ℝ) ^ (-(δ₂ / 8)) ≤ 1 / 2 := by
+        have hr0 : 0 ≤ (n : ℝ) ^ (-(δ₂ / 8)) := Real.rpow_nonneg hn0.le _
+        have hm0 : (0 : ℝ) ≤ X.m := Nat.cast_nonneg _
+        nlinarith
+      have h2 : (X.coarseLaw v).pr (fun c => ∃ x : CubeVertex n, IsEvenRole x ∧ (X.g.L.key x).1 = i ∧
+          (n : ℝ) ^ (-(δ₂ * (X.evenType x).u / 8)) < X.rate2Base (v, c) (X.evenType x)) ≤ charge / 8 :=
+        (Lane_opus_coarse.coarse_step2_alarm_probability X v i hn1 hr2 (fun x hx _ =>
+          hV0.2.1 (X.evenType x) (Finset.mem_image.mpr
+            ⟨x, Finset.mem_filter.mpr ⟨Finset.mem_univ _, hx⟩, rfl⟩))).trans hStep2Tail
+      have hmLarge : 4000 ≤ X.m := by simpa only [hXm] using hMNum
+      have hTleJ : X.T ≤ X.J := by
+        change T₆ X.g.L.m ≤ J₆ X.g.L.m
+        rw [X.g.m_eq]
+        exact hTJNum
+      have hmOne : 1 ≤ X.m := by omega
+      have hmPos : 0 < (X.g.L.m : ℝ) := by exact_mod_cast (show 0 < X.m by omega)
+      have hTOne : 1 ≤ X.T := (Nat.one_le_ceil_iff).2 (Real.rpow_pos_of_pos hmPos _)
+      have hJOne : 1 ≤ X.J := hTOne.trans hTleJ
+      have hJleM : X.J ≤ X.m := by
+        change ⌊(X.g.L.m : ℝ) ^ (1 / 25 : ℝ)⌋₊ ≤ X.g.L.m
+        have hmR : 1 ≤ (X.g.L.m : ℝ) := by exact_mod_cast hmOne
+        have hh := Real.rpow_le_rpow_of_exponent_le hmR (by norm_num : (1 / 25 : ℝ) ≤ 1)
+        have hpow : (X.g.L.m : ℝ) ^ (1 / 25 : ℝ) ≤ (X.g.L.m : ℝ) := by
+          simpa only [Real.rpow_one] using hh
+        exact Nat.floor_le_of_le hpow
+      have hMbound : (X.m : ℝ) + 2 ≤ (n : ℝ) ^ (2 * α₆ p₀) := by simpa [hXm, m₆] using hCeilNum
+      have hlogM : Real.log ((X.m : ℝ) + 2) ≤ 2 * α₆ p₀ * Real.log (n : ℝ) := by
+        calc
+          _ ≤ Real.log ((n : ℝ) ^ (2 * α₆ p₀)) := Real.log_le_log (by positivity) hMbound
+          _ = _ := Real.log_rpow hn0 _
+      have hcount := hidden_step3_count_tail X hn1 hmLarge hJOne hJleM hTleJ hlogM
+      have hratio : Real.exp (-(9 / 1000) * X.k) / Real.exp (-(9 / 2000) * X.k) ≤
+          Real.exp (-(7 / 2000 : ℝ) * X.k) := by
+        rw [← Real.exp_sub]
+        apply Real.exp_le_exp.mpr
+        have hk0 : (0 : ℝ) ≤ X.k := Nat.cast_nonneg _
+        linarith
+      have h3 : (X.coarseLaw v).pr (fun c => ∃ a ∈ X.g.L.oddStates, (X.g.L.stKey a).1 = i ∧
+          ∃ D ∈ X.absDescs a, Real.exp (-(9 / 2000) * X.k) < X.rate3Base (v, c) a D) ≤ charge / 8 := by
+        refine (Lane_opus_coarse.coarse_step3_alarm_probability X v i hn4 _ _ (Real.exp_pos _)
+          (Real.exp_nonneg _) (fun a ha D hD => hV0.2.2 a ha D hD)).trans ?_
+        have hB0 : (0 : ℝ) ≤ (descriptorCodeCountBound X : ℝ) := Nat.cast_nonneg _
+        calc
+          3 * (descriptorCodeCountBound X : ℝ) *
+              (Real.exp (-(9 / 1000) * X.k) / Real.exp (-(9 / 2000) * X.k)) ≤
+              3 * ((descriptorCodeCountBound X : ℝ) * Real.exp (-(7 / 2000 : ℝ) * X.k)) := by
+            rw [← mul_assoc]
+            exact mul_le_mul_of_nonneg_left hratio (mul_nonneg (by norm_num) hB0)
+          _ ≤ 3 * (n : ℝ) ^ (-(1 / 10 ^ 7 : ℝ)) := mul_le_mul_of_nonneg_left hcount (by norm_num)
+          _ ≤ charge / 8 := hStep3Num
+      refine (FinProb.pr_union _ _ _).trans ((add_le_add h2 h3).trans (le_of_eq ?_))
+      ring
     have heq : (X.coarseLaw v).pr (fun c => c ∈ X.bad2Set v i) = (X.coarseLaw v).pr (X.Bad2 v i) := by
       apply pr_congr
       intro c
@@ -1526,7 +1591,7 @@ theorem L6_1h_coarse (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
       have hdegree : ((Finset.univ.filter (adj i)).card : ℝ) * charge ≤ 1 / 2 := by
         have hcard : ((Finset.univ.filter (adj i)).card : ℝ) ≤ (602 ^ 6 : ℝ) := by
           exact_mod_cast coarse_overlap_degree_le X i
-        exact (mul_le_mul_of_nonneg_right hcard hcharge0).trans hbudget.1
+        exact (mul_le_mul_of_nonneg_right hcard hcharge0).trans hDegNum
       have hprob := probability_le_charge_product (Finset.univ.filter (adj i))
         ((X.coarseLaw v).pr (fun c => c ∈ X.bad2Set v i)) charge hcharge0 hcharge1.le
         (hgroup i) hdegree

@@ -2,6 +2,7 @@ import HypercubeRamsey.S03.Height.Scale
 import HypercubeRamsey.S03.Height.Selection_p_height_small
 import HypercubeRamsey.S03.Height.Selection_p_height_main
 import HypercubeRamsey.S03.Height.Split_opus_height
+import HypercubeRamsey.S03.Height.Selection_sol_height_short
 import OAI.Combinatorics.Ramsey.Hypercube
 
 /-!

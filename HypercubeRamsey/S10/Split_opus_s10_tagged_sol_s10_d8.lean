@@ -17,7 +17,7 @@ variable (p : HDParams)
 
 theorem reach_domain {Sites : p.Sites} {P A : p.Loc → Bool} {E : p.EligMap}
     {vq : CubeVertex p.d} {R : ℕ} {v : CubeVertex p.d} {j : ℕ}
-    (h : p.Reach Sites P A E vq R v j) : v ∈ Sites ∧ hammingDist v vq ≤ R := by
+    (h : p.Reach Sites P A E vq R v j) : v ∈ Sites ∧ _root_.hammingDist v vq ≤ R := by
   induction h with
   | start v hv hdist => exact ⟨hv, hdist⟩
   | up v j hj hreach hbad ih => exact ih
@@ -25,11 +25,11 @@ theorem reach_domain {Sites : p.Sites} {P A : p.Loc → Bool} {E : p.EligMap}
 
 theorem reach_congr {Sites : p.Sites} {P A P' A' : p.Loc → Bool}
     {E E' : p.EligMap} {vq : CubeVertex p.d} {R : ℕ}
-    (hbad : ∀ v, v ∈ Sites → hammingDist v vq ≤ R → ∀ j,
+    (hbad : ∀ v, v ∈ Sites → _root_.hammingDist v vq ≤ R → ∀ j,
       p.BadN P A E v j ↔ p.BadN P' A' E' v j) {v : CubeVertex p.d} {j : ℕ} :
     p.Reach Sites P A E vq R v j ↔ p.Reach Sites P' A' E' vq R v j := by
   have forward {P A P' A' : p.Loc → Bool} {E E' : p.EligMap}
-      (hb : ∀ v, v ∈ Sites → hammingDist v vq ≤ R → ∀ j,
+      (hb : ∀ v, v ∈ Sites → _root_.hammingDist v vq ≤ R → ∀ j,
         p.BadN P A E v j → p.BadN P' A' E' v j)
       (h : p.Reach Sites P A E vq R v j) : p.Reach Sites P' A' E' vq R v j := by
     induction h with
@@ -43,7 +43,7 @@ theorem reach_congr {Sites : p.Sites} {P A P' A' : p.Loc → Bool}
 
 theorem height_congr {Sites : p.Sites} {P A P' A' : p.Loc → Bool}
     {E E' : p.EligMap} {vq : CubeVertex p.d} {R : ℕ}
-    (hbad : ∀ v, v ∈ Sites → hammingDist v vq ≤ R → ∀ j,
+    (hbad : ∀ v, v ∈ Sites → _root_.hammingDist v vq ≤ R → ∀ j,
       p.BadN P A E v j ↔ p.BadN P' A' E' v j) :
     p.height Sites P A E R vq = p.height Sites P' A' E' R vq := by
   unfold HDParams.height
@@ -56,8 +56,8 @@ theorem bad_congr {P A P' A' : p.Loc → Bool} {E E' : p.EligMap}
     {v : CubeVertex p.d} {j : Fin (p.H + 1)}
     (hE : E v j = E' v j)
     (hEA : ∀ ℓ ∈ E v j, A ℓ = A' ℓ)
-    (hP : ∀ u : CubeVertex p.d, hammingDist u v ≤ p.r + p.D → P (u, j) = P' (u, j))
-    (hA : ∀ u : CubeVertex p.d, hammingDist u v ≤ p.r + p.D → A (u, j) = A' (u, j)) :
+    (hP : ∀ u : CubeVertex p.d, _root_.hammingDist u v ≤ p.r + p.D → P (u, j) = P' (u, j))
+    (hA : ∀ u : CubeVertex p.d, _root_.hammingDist u v ≤ p.r + p.D → A (u, j) = A' (u, j)) :
     p.Bad P A E v j ↔ p.Bad P' A' E' v j := by
   have hnone : (∀ ℓ ∈ E v j, A ℓ = false) ↔ (∀ ℓ ∈ E' v j, A' ℓ = false) := by
     rw [← hE]
@@ -66,11 +66,11 @@ theorem bad_congr {P A P' A' : p.Loc → Bool} {E E' : p.EligMap}
     · rw [hEA ℓ hℓ]; exact h ℓ hℓ
   have hball :
       (Finset.univ.filter fun u : CubeVertex p.d =>
-        P (u, j) = true ∧ A (u, j) = true ∧ hammingDist u v ≤ p.r + p.D) =
+        P (u, j) = true ∧ A (u, j) = true ∧ _root_.hammingDist u v ≤ p.r + p.D) =
       (Finset.univ.filter fun u : CubeVertex p.d =>
-        P' (u, j) = true ∧ A' (u, j) = true ∧ hammingDist u v ≤ p.r + p.D) := by
+        P' (u, j) = true ∧ A' (u, j) = true ∧ _root_.hammingDist u v ≤ p.r + p.D) := by
     ext u
-    by_cases hd : hammingDist u v ≤ p.r + p.D
+    by_cases hd : _root_.hammingDist u v ≤ p.r + p.D
     · simp [hd, hP u hd, hA u hd]
     · simp [hd]
   unfold HDParams.Bad
@@ -101,30 +101,30 @@ theorem selectionAt_congr {Sites : p.Sites} {P A P' A' : p.Loc → Bool}
 fields on its enlarged ball, and the tie permutation at the query itself. -/
 theorem selection_congr_of_ball {Sites : p.Sites} {P A P' A' : p.Loc → Bool}
     {E E' : p.EligMap} {τ τ' : p.Ties} {vq : CubeVertex p.d} {R : ℕ}
-    (hE : ∀ v, hammingDist v vq ≤ R → ∀ j, E v j = E' v j)
-    (hgeom : ∀ v, hammingDist v vq ≤ R → ∀ j ℓ, ℓ ∈ E v j →
-      hammingDist ℓ.1 v ≤ p.r)
-    (hP : ∀ ℓ : p.Loc, hammingDist ℓ.1 vq ≤ R + p.r + p.D → P ℓ = P' ℓ)
-    (hA : ∀ ℓ : p.Loc, hammingDist ℓ.1 vq ≤ R + p.r + p.D → A ℓ = A' ℓ)
+    (hE : ∀ v, _root_.hammingDist v vq ≤ R → ∀ j, E v j = E' v j)
+    (hgeom : ∀ v, _root_.hammingDist v vq ≤ R → ∀ j ℓ, ℓ ∈ E v j →
+      _root_.hammingDist ℓ.1 v ≤ p.r)
+    (hP : ∀ ℓ : p.Loc, _root_.hammingDist ℓ.1 vq ≤ R + p.r + p.D → P ℓ = P' ℓ)
+    (hA : ∀ ℓ : p.Loc, _root_.hammingDist ℓ.1 vq ≤ R + p.r + p.D → A ℓ = A' ℓ)
     (hτ : ∀ j, τ (vq, j) = τ' (vq, j)) :
     p.selectionAt Sites P A E τ R vq = p.selectionAt Sites P' A' E' τ' R vq := by
-  have hbad : ∀ v, hammingDist v vq ≤ R → ∀ j,
+  have hbad : ∀ v, _root_.hammingDist v vq ≤ R → ∀ j,
       p.Bad P A E v j ↔ p.Bad P' A' E' v j := by
     intro v hv j
     apply bad_congr p (hE v hv j)
     · intro ℓ hℓ
       apply hA ℓ
-      have ht := hammingDist_triangle ℓ.1 v vq
+      have ht := _root_.hammingDist_triangle ℓ.1 v vq
       have hg := hgeom v hv j ℓ hℓ
       omega
     · intro u hu
       apply hP (u, j)
-      have ht := hammingDist_triangle u v vq
+      have ht := _root_.hammingDist_triangle u v vq
       dsimp only
       omega
     · intro u hu
       apply hA (u, j)
-      have ht := hammingDist_triangle u v vq
+      have ht := _root_.hammingDist_triangle u v vq
       dsimp only
       omega
   apply selectionAt_congr p
@@ -149,10 +149,10 @@ variable {n m : ℕ}
 /-- A fixed primitive rectangle, including all levels when lifted to IDs. -/
 noncomputable def siteDomain (q : P10_1kProjectedSite n m) (S R : ℕ) :
     Finset (P10_1kProjectedSite n m) :=
-  Finset.univ.filter fun u => hammingDist q.1 u.1 ≤ S ∧ hammingDist q.2 u.2 ≤ R
+  Finset.univ.filter fun u => _root_.hammingDist q.1 u.1 ≤ S ∧ _root_.hammingDist q.2 u.2 ≤ R
 
 theorem mem_siteDomain {q u : P10_1kProjectedSite n m} {S R : ℕ} :
-    u ∈ siteDomain q S R ↔ hammingDist q.1 u.1 ≤ S ∧ hammingDist q.2 u.2 ≤ R := by
+    u ∈ siteDomain q S R ↔ _root_.hammingDist q.1 u.1 ≤ S ∧ _root_.hammingDist q.2 u.2 ≤ R := by
   simp [siteDomain]
 
 theorem siteDomain_mono {q : P10_1kProjectedSite n m} {S R S' R' : ℕ}
@@ -162,7 +162,7 @@ theorem siteDomain_mono {q : P10_1kProjectedSite n m} {S R S' R' : ℕ}
 
 theorem envelope_dist {q u : P10_1kProjectedSite n m}
     (hu : u ∈ p10_1kProjectedNeighborEnvelope q) :
-    hammingDist q.1 u.1 ≤ 1 ∧ hammingDist q.2 u.2 ≤ 3 := by
+    _root_.hammingDist q.1 u.1 ≤ 1 ∧ _root_.hammingDist q.2 u.2 ≤ 3 := by
   rcases Finset.mem_union.mp hu with hs | hr
   · obtain ⟨z, hz, rfl⟩ := Finset.mem_image.mp hs
     exact ⟨(Finset.mem_filter.mp hz).2.le, by simp⟩
@@ -175,21 +175,21 @@ theorem siteDomain_comp {q u v : P10_1kProjectedSite n m} {S R S' R' : ℕ}
   have hu' := mem_siteDomain.mp hu
   have hv' := mem_siteDomain.mp hv
   exact mem_siteDomain.mpr
-    ⟨(hammingDist_triangle q.1 u.1 v.1).trans (Nat.add_le_add hu'.1 hv'.1),
-      (hammingDist_triangle q.2 u.2 v.2).trans (Nat.add_le_add hu'.2 hv'.2)⟩
+    ⟨(_root_.hammingDist_triangle q.1 u.1 v.1).trans (Nat.add_le_add hu'.1 hv'.1),
+      (_root_.hammingDist_triangle q.2 u.2 v.2).trans (Nat.add_le_add hu'.2 hv'.2)⟩
 
 theorem siteDomain_disjoint {q q' : P10_1kProjectedSite n m} {S R : ℕ}
-    (hsep : ¬ (hammingDist q.1 q'.1 ≤ 2 * S ∧ hammingDist q.2 q'.2 ≤ 2 * R)) :
+    (hsep : ¬ (_root_.hammingDist q.1 q'.1 ≤ 2 * S ∧ _root_.hammingDist q.2 q'.2 ≤ 2 * R)) :
     Disjoint (siteDomain q S R) (siteDomain q' S R) := by
   apply Finset.disjoint_left.mpr
   intro u hu hu'
   have hq := mem_siteDomain.mp hu
   have hq' := mem_siteDomain.mp hu'
   apply hsep
-  have hs := hammingDist_triangle q.1 u.1 q'.1
-  have hr := hammingDist_triangle q.2 u.2 q'.2
-  rw [hammingDist_comm u.1 q'.1] at hs
-  rw [hammingDist_comm u.2 q'.2] at hr
+  have hs := _root_.hammingDist_triangle q.1 u.1 q'.1
+  have hr := _root_.hammingDist_triangle q.2 u.2 q'.2
+  rw [_root_.hammingDist_comm u.1 q'.1] at hs
+  rw [_root_.hammingDist_comm u.2 q'.2] at hr
   constructor <;> omega
 
 /-- An envelope step adds at most one special bit and three residual bits. -/
@@ -209,7 +209,7 @@ theorem mem_idDomain {δ : ℝ} {q : P10_1kProjectedSite n m} {S R : ℕ}
   simp [idDomain]
 
 theorem idDomain_disjoint {δ : ℝ} {q q' : P10_1kProjectedSite n m} {S R : ℕ}
-    (hsep : ¬ (hammingDist q.1 q'.1 ≤ 2 * S ∧ hammingDist q.2 q'.2 ≤ 2 * R)) :
+    (hsep : ¬ (_root_.hammingDist q.1 q'.1 ≤ 2 * S ∧ _root_.hammingDist q.2 q'.2 ≤ 2 * R)) :
     Disjoint (idDomain δ q S R) (idDomain δ q' S R) := by
   apply Finset.disjoint_left.mpr
   intro c hc hc'
@@ -219,18 +219,18 @@ theorem idDomain_disjoint {δ : ℝ} {q q' : P10_1kProjectedSite n m} {S R : ℕ
 theorem eligible_geometry {p : HDParams} {P : p.Loc → Bool}
     {v : CubeVertex p.d} {j : Fin (p.H + 1)} {ℓ : p.Loc}
     (hℓ : ℓ ∈ p10_1kHeightEligibleIds p P v j) :
-    P ℓ = true ∧ ℓ.2 = j ∧ hammingDist ℓ.1 v ≤ p.r := by
+    P ℓ = true ∧ ℓ.2 = j ∧ _root_.hammingDist ℓ.1 v ≤ p.r := by
   obtain ⟨u, hu, rfl⟩ := Finset.mem_image.mp hℓ
   exact ⟨(Finset.mem_filter.mp hu).2.1, rfl, (Finset.mem_filter.mp hu).2.2⟩
 
 theorem eligible_congr {p : HDParams} {P P' : p.Loc → Bool}
     {v : CubeVertex p.d} {j : Fin (p.H + 1)}
-    (hP : ∀ u, hammingDist u v ≤ p.r → P (u, j) = P' (u, j)) :
+    (hP : ∀ u, _root_.hammingDist u v ≤ p.r → P (u, j) = P' (u, j)) :
     p10_1kHeightEligibleIds p P v j = p10_1kHeightEligibleIds p P' v j := by
   unfold p10_1kHeightEligibleIds
   congr 1
   ext u
-  by_cases hd : hammingDist u v ≤ p.r
+  by_cases hd : _root_.hammingDist u v ≤ p.r
   · simp [hd, hP u hd]
   · simp [hd]
 
@@ -247,8 +247,8 @@ theorem candidate_domain {δ : ℝ} {q : P10_1kProjectedSite n m}
   apply mem_idDomain.mpr
   apply mem_siteDomain.mpr
   refine ⟨henv.1, ?_⟩
-  have ht := hammingDist_triangle q.2 s.2 ℓ.1
-  rw [hammingDist_comm s.2 ℓ.1] at ht
+  have ht := _root_.hammingDist_triangle q.2 s.2 ℓ.1
+  rw [_root_.hammingDist_comm s.2 ℓ.1] at ht
   exact ht.trans (Nat.add_le_add henv.2 hgeom.2.2)
 
 theorem candidates_congr {δ : ℝ} {q : P10_1kProjectedSite n m}
@@ -268,8 +268,8 @@ theorem candidates_congr {δ : ℝ} {q : P10_1kProjectedSite n m}
   have henv := envelope_dist hs
   apply mem_siteDomain.mpr
   refine ⟨henv.1, ?_⟩
-  have ht := hammingDist_triangle q.2 s.2 u
-  rw [hammingDist_comm s.2 u] at ht
+  have ht := _root_.hammingDist_triangle q.2 s.2 u
+  rw [_root_.hammingDist_comm s.2 u] at ht
   exact ht.trans (Nat.add_le_add henv.2 hu)
 
 /-- Eligibility removes exactly IDs forbidden by envelope groups. -/
@@ -289,7 +289,7 @@ theorem eligibleFromForbidden_geometry {δ : ℝ}
     {j : Fin ((p10_1kHeightParams n m δ).H + 1)}
     {ℓ : (p10_1kHeightParams n m δ).Loc}
     (hℓ : ℓ ∈ eligibleFromForbidden δ P F z v j) :
-    hammingDist ℓ.1 v ≤ (p10_1kHeightParams n m δ).r :=
+    _root_.hammingDist ℓ.1 v ≤ (p10_1kHeightParams n m δ).r :=
   (eligible_geometry (Finset.mem_filter.mp hℓ).1).2.2
 
 theorem eligibleFromForbidden_congr {δ : ℝ}
@@ -297,7 +297,7 @@ theorem eligibleFromForbidden_congr {δ : ℝ}
     {F F' : P10_1kProjectedSite n m → Finset (P10_1kProspectiveId n m δ)}
     {z : P10_1kSpecialSliceWord m} {v : CubeVertex (n - m)}
     {j : Fin ((p10_1kHeightParams n m δ).H + 1)}
-    (hP : ∀ u, hammingDist u v ≤ (p10_1kHeightParams n m δ).r →
+    (hP : ∀ u, _root_.hammingDist u v ≤ (p10_1kHeightParams n m δ).r →
       P (z, (u, j)) = P' (z, (u, j)))
     (hF : ∀ q, (z, v) ∈ p10_1kProjectedNeighborEnvelope q → F q = F' q) :
     eligibleFromForbidden δ P F z v j = eligibleFromForbidden δ P' F' z v j := by
@@ -343,10 +343,10 @@ theorem projected_selection_congr {δ : ℝ}
       apply mem_siteDomain.mpr
       refine ⟨by simp, ?_⟩
       calc
-        hammingDist s.2 u ≤ hammingDist s.2 v + hammingDist v u :=
-          hammingDist_triangle _ _ _
-        _ = hammingDist v s.2 + hammingDist u v :=
-          congrArg₂ (fun a b : ℕ => a + b) (hammingDist_comm _ _) (hammingDist_comm _ _)
+        _root_.hammingDist s.2 u ≤ _root_.hammingDist s.2 v + _root_.hammingDist v u :=
+          _root_.hammingDist_triangle _ _ _
+        _ = _root_.hammingDist v s.2 + _root_.hammingDist u v :=
+          congrArg₂ (fun a b : ℕ => a + b) (_root_.hammingDist_comm _ _) (_root_.hammingDist_comm _ _)
         _ ≤ p.Rlong + p.r := Nat.add_le_add hv hu
         _ ≤ p.Rlong + p.r + p.D := Nat.le_add_right _ _
     · intro q hq
@@ -354,10 +354,10 @@ theorem projected_selection_congr {δ : ℝ}
       have henv := envelope_dist ((p10_1kProjectedNeighborEnvelope_symm q (s.1, v)).mp hq)
       apply mem_siteDomain.mpr
       refine ⟨henv.1, ?_⟩
-      have ht := hammingDist_triangle s.2 v q.2
-      have hv' : hammingDist s.2 v ≤ p.Rlong := by
+      have ht := _root_.hammingDist_triangle s.2 v q.2
+      have hv' : _root_.hammingDist s.2 v ≤ p.Rlong := by
         calc
-          hammingDist s.2 v = hammingDist v s.2 := hammingDist_comm _ _
+          _root_.hammingDist s.2 v = _root_.hammingDist v s.2 := _root_.hammingDist_comm _ _
           _ ≤ p.Rlong := hv
       dsimp only at henv
       exact ht.trans (Nat.add_le_add hv' henv.2)
@@ -367,12 +367,12 @@ theorem projected_selection_congr {δ : ℝ}
     apply hP (s.1, ℓ)
     apply mem_idDomain.mpr
     apply mem_siteDomain.mpr
-    exact ⟨by simp, by rw [hammingDist_comm]; exact hℓ⟩
+    exact ⟨by simp, by rw [_root_.hammingDist_comm]; exact hℓ⟩
   · intro ℓ hℓ
     apply hA (s.1, ℓ)
     apply mem_idDomain.mpr
     apply mem_siteDomain.mpr
-    exact ⟨by simp, by rw [hammingDist_comm]; exact hℓ⟩
+    exact ⟨by simp, by rw [_root_.hammingDist_comm]; exact hℓ⟩
   · exact hτ
 
 /-- The largest primitive radius of a star is bounded by the common Rloc.
@@ -479,7 +479,7 @@ noncomputable def primitiveDomain (q : P10_1kProjectedSite n m) (S R : ℕ) :
   Finset.univ.filter fun i => primitiveSite n m δ i ∈ siteDomain q S R
 
 theorem primitiveDomain_disjoint {q q' : P10_1kProjectedSite n m} {S R : ℕ}
-    (hsep : ¬ (hammingDist q.1 q'.1 ≤ 2 * S ∧ hammingDist q.2 q'.2 ≤ 2 * R)) :
+    (hsep : ¬ (_root_.hammingDist q.1 q'.1 ≤ 2 * S ∧ _root_.hammingDist q.2 q'.2 ≤ 2 * R)) :
     Disjoint (primitiveDomain n m δ q S R) (primitiveDomain n m δ q' S R) := by
   apply Finset.disjoint_left.mpr
   intro i hi hi'
@@ -665,5 +665,158 @@ theorem update_agree_on {β : Type*} (D : Finset ι) {u v : ι → β}
   · simp [Function.update_of_ne hic, huv i hi]
 
 end Products
+
+theorem legal_congr (p : HDParams) {P P' : p.Loc → Bool} {E E' : p.EligMap}
+    {dom : p.Sites} (hE : ∀ v ∈ dom, ∀ j, E v j = E' v j)
+    (hP : ∀ v ∈ dom, ∀ j ℓ, ℓ ∈ E v j → P ℓ = P' ℓ) :
+    p.Legal P E dom ↔ p.Legal P' E' dom := by
+  unfold HDParams.Legal
+  refine forall_congr' fun v => imp_congr_right fun hv => forall_congr' fun j => ?_
+  unfold HDParams.LegalAt
+  rw [← hE v hv j]
+  apply and_congr
+  · exact forall_congr' fun ℓ => imp_congr_right fun hℓ => by rw [hP v hv j ℓ hℓ]
+  · exact Iff.rfl
+
+theorem candidate_domain_subset {n m : ℕ} {δ : ℝ} {q : P10_1kProjectedSite n m}
+    {S : Finset (P10_1kProjectedSite n m)}
+    (hS : S ⊆ p10_1kProjectedNeighborEnvelope q)
+    {P : P10_1kProspectiveId n m δ → Bool} {c : P10_1kProspectiveId n m δ}
+    (hc : c ∈ S.biUnion fun s =>
+      (Finset.univ : Finset (Fin ((p10_1kHeightParams n m δ).H + 1))).biUnion fun j =>
+        (p10_1kHeightEligibleIds (p10_1kHeightParams n m δ) (fun ℓ => P (s.1, ℓ)) s.2 j).image
+          (fun ℓ => (s.1, ℓ))) :
+    c ∈ idDomain δ q 1 (3 + (p10_1kHeightParams n m δ).r) := by
+  obtain ⟨s, hs, hc⟩ := Finset.mem_biUnion.mp hc
+  obtain ⟨j, _, hc⟩ := Finset.mem_biUnion.mp hc
+  obtain ⟨ℓ, hℓ, rfl⟩ := Finset.mem_image.mp hc
+  have henv := envelope_dist (hS hs)
+  have hgeom := eligible_geometry hℓ
+  apply mem_idDomain.mpr
+  apply mem_siteDomain.mpr
+  refine ⟨henv.1, ?_⟩
+  have ht := _root_.hammingDist_triangle q.2 s.2 ℓ.1
+  rw [_root_.hammingDist_comm s.2 ℓ.1] at ht
+  exact ht.trans (Nat.add_le_add henv.2 hgeom.2.2)
+
+theorem candidates_congr_subset {n m : ℕ} {δ : ℝ} {q : P10_1kProjectedSite n m}
+    {S : Finset (P10_1kProjectedSite n m)}
+    (hS : S ⊆ p10_1kProjectedNeighborEnvelope q)
+    {P P' : P10_1kProspectiveId n m δ → Bool}
+    (hP : ∀ c ∈ idDomain δ q 1 (3 + (p10_1kHeightParams n m δ).r), P c = P' c) :
+    (S.biUnion fun s =>
+      (Finset.univ : Finset (Fin ((p10_1kHeightParams n m δ).H + 1))).biUnion fun j =>
+        (p10_1kHeightEligibleIds (p10_1kHeightParams n m δ) (fun ℓ => P (s.1, ℓ)) s.2 j).image
+          (fun ℓ => (s.1, ℓ))) =
+    (S.biUnion fun s =>
+      (Finset.univ : Finset (Fin ((p10_1kHeightParams n m δ).H + 1))).biUnion fun j =>
+        (p10_1kHeightEligibleIds (p10_1kHeightParams n m δ) (fun ℓ => P' (s.1, ℓ)) s.2 j).image
+          (fun ℓ => (s.1, ℓ))) := by
+  apply Finset.biUnion_congr rfl
+  intro s hs
+  apply Finset.biUnion_congr rfl
+  intro j _
+  congr 1
+  apply eligible_congr
+  intro u hu
+  apply hP (s.1, (u, j))
+  apply mem_idDomain.mpr
+  have henv := envelope_dist (hS hs)
+  apply mem_siteDomain.mpr
+  refine ⟨henv.1, ?_⟩
+  have ht := _root_.hammingDist_triangle q.2 s.2 u
+  rw [_root_.hammingDist_comm s.2 u] at ht
+  exact ht.trans (Nat.add_le_add henv.2 hu)
+
+theorem projected_legal_congr {n m : ℕ} {δ : ℝ}
+    {P P' : P10_1kProspectiveId n m δ → Bool}
+    {F F' : P10_1kProjectedSite n m → Finset (P10_1kProspectiveId n m δ)}
+    {s : P10_1kProjectedSite n m} {Sites : (p10_1kHeightParams n m δ).Sites}
+    (hP : ∀ c ∈ idDomain δ s 0 ((p10_1kHeightParams n m δ).Rlong +
+      (p10_1kHeightParams n m δ).r), P c = P' c)
+    (hF : ∀ q ∈ siteDomain s 1 ((p10_1kHeightParams n m δ).Rlong + 3), F q = F' q) :
+    (p10_1kHeightParams n m δ).Legal (fun ℓ => P (s.1, ℓ))
+      (eligibleFromForbidden δ P F s.1)
+      ((p10_1kHeightParams n m δ).domBall Sites s.2 (p10_1kHeightParams n m δ).Rlong) ↔
+    (p10_1kHeightParams n m δ).Legal (fun ℓ => P' (s.1, ℓ))
+      (eligibleFromForbidden δ P' F' s.1)
+      ((p10_1kHeightParams n m δ).domBall Sites s.2 (p10_1kHeightParams n m δ).Rlong) := by
+  let p := p10_1kHeightParams n m δ
+  have hPos : ∀ v, _root_.hammingDist v s.2 ≤ p.Rlong → ∀ j u,
+      _root_.hammingDist u v ≤ p.r → P (s.1, (u, j)) = P' (s.1, (u, j)) := by
+    intro v hv j u hu
+    apply hP (s.1, (u, j))
+    apply mem_idDomain.mpr
+    apply mem_siteDomain.mpr
+    refine ⟨by simp, ?_⟩
+    calc
+      _root_.hammingDist s.2 u ≤ _root_.hammingDist s.2 v + _root_.hammingDist v u :=
+        _root_.hammingDist_triangle _ _ _
+      _ = _root_.hammingDist v s.2 + _root_.hammingDist u v :=
+        congrArg₂ (fun a b : ℕ => a + b) (_root_.hammingDist_comm _ _) (_root_.hammingDist_comm _ _)
+      _ ≤ p.Rlong + p.r := Nat.add_le_add hv hu
+  apply legal_congr p
+  · intro v hv j
+    have hd := (Finset.mem_filter.mp hv).2
+    apply eligibleFromForbidden_congr (hPos v hd j)
+    intro q hq
+    apply hF q
+    have henv := envelope_dist ((p10_1kProjectedNeighborEnvelope_symm q (s.1, v)).mp hq)
+    apply mem_siteDomain.mpr
+    refine ⟨henv.1, ?_⟩
+    calc
+      _root_.hammingDist s.2 q.2 ≤ _root_.hammingDist s.2 v + _root_.hammingDist v q.2 :=
+        _root_.hammingDist_triangle _ _ _
+      _ ≤ p.Rlong + 3 := Nat.add_le_add (by
+        calc
+          _root_.hammingDist s.2 v = _root_.hammingDist v s.2 := _root_.hammingDist_comm _ _
+          _ ≤ p.Rlong := hd) henv.2
+  · intro v hv j ℓ hℓ
+    have hg := eligible_geometry (Finset.mem_filter.mp hℓ).1
+    have he : (ℓ.1, j) = ℓ := Prod.ext rfl hg.2.1.symm
+    simpa only [he] using hPos v (Finset.mem_filter.mp hv).2 j ℓ.1 hg.2.2
+
+/-- Field-specific primitive scope: mask reads use a smaller special radius. -/
+noncomputable def readDomain (n m : ℕ) (δ : ℝ) (q : P10_1kProjectedSite n m)
+    (S SM R : ℕ) : Finset (PrimitiveIndex n m δ) :=
+  Finset.univ.filter fun i => primitiveSite n m δ i ∈ siteDomain q
+    (match i with | .inl (.inl (.inr _)) => SM | _ => S) R
+
+theorem historyRead_agree (n m k N : ℕ) (δ : ℝ) {q : P10_1kProjectedSite n m} {S SM R : ℕ}
+    {h h' : RawHistory n m k N δ} :
+    (∀ i ∈ readDomain n m δ q S SM R,
+      historyEquiv n m k N δ h i = historyEquiv n m k N δ h' i) ↔
+    (∀ c ∈ idDomain δ q S R, h.1.1.1.1 c = h'.1.1.1.1 c) ∧
+    (∀ c ∈ idDomain δ q S R, h.1.1.1.2 c = h'.1.1.1.2 c) ∧
+    (∀ s ∈ siteDomain q SM R, h.1.1.2 s = h'.1.1.2 s) ∧
+    (∀ c ∈ idDomain δ q S R, h.1.2 c = h'.1.2 c) ∧
+    (∀ c ∈ idDomain δ q S R, h.2 c = h'.2 c) := by
+  constructor
+  · intro H
+    refine ⟨?_, ?_, ?_, ?_, ?_⟩
+    · intro c hc
+      apply H (.inl (.inl (.inl (.inl c))))
+      exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, mem_idDomain.mp hc⟩
+    · intro c hc
+      apply H (.inl (.inl (.inl (.inr c))))
+      exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, mem_idDomain.mp hc⟩
+    · intro s hs
+      apply H (.inl (.inl (.inr s)))
+      exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, hs⟩
+    · intro c hc
+      apply H (.inl (.inr c))
+      exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, mem_idDomain.mp hc⟩
+    · intro c hc
+      apply H (.inr c)
+      exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, mem_idDomain.mp hc⟩
+  · rintro ⟨hP, hW, hS, hA, hτ⟩ i hi
+    have hi' := (Finset.mem_filter.mp hi).2
+    rcases i with (((c | c) | s) | c) | c
+    · exact hP c (mem_idDomain.mpr hi')
+    · exact hW c (mem_idDomain.mpr hi')
+    · exact hS s hi'
+    · exact hA c (mem_idDomain.mpr hi')
+    · exact hτ c (mem_idDomain.mpr hi')
+
 
 end HypercubeRamsey.Lane_sol_s10_d8

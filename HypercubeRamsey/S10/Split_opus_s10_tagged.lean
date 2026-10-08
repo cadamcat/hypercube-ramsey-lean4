@@ -1394,13 +1394,13 @@ theorem d8a_odd_separated (M : MenuData n N E X Y G ζ δ κ) (σ : MaskStrategy
         · apply hsep i j hgt
           exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, ⟨by
             calc
-              hammingDist (groupOf δ (s j)).1 (groupOf δ (s i)).1 =
-                hammingDist (groupOf δ (s i)).1 (groupOf δ (s j)).1 := hammingDist_comm _ _
+              _root_.hammingDist (groupOf δ (s j)).1 (groupOf δ (s i)).1 =
+                _root_.hammingDist (groupOf δ (s i)).1 (groupOf δ (s j)).1 := _root_.hammingDist_comm _ _
               _ ≤ 8 := hz,
             by
               calc
-                hammingDist (groupOf δ (s j)).2 (groupOf δ (s i)).2 =
-                  hammingDist (groupOf δ (s i)).2 (groupOf δ (s j)).2 := hammingDist_comm _ _
+                _root_.hammingDist (groupOf δ (s j)).2 (groupOf δ (s i)).2 =
+                  _root_.hammingDist (groupOf δ (s i)).2 (groupOf δ (s j)).2 := _root_.hammingDist_comm _ _
                 _ ≤ 2 * Rloc n δ + 16 := hr.trans (by omega)⟩⟩
       have hFactor : (historyLaw M σ t).expect (fun h => ∏ i, (N : ℝ) * oddRow M t h (s i) y) =
           ∏ i, oddMean M t σ y (s i) := by
@@ -1523,8 +1523,8 @@ theorem d8b_even_separated (M : MenuData n N E X Y G ζ δ κ) (σ : MaskStrateg
               funext ω
               exact H.1 ω ω (fun _ _ => rfl) x
     have hSep : ∀ i j : Fin m, i ≠ j →
-        ¬ (hammingDist (evenSite δ (s i)).1 (evenSite δ (s j)).1 ≤ 8 ∧
-          hammingDist (evenSite δ (s i)).2 (evenSite δ (s j)).2 ≤ 2 * Rloc n δ) := by
+        ¬ (_root_.hammingDist (evenSite δ (s i)).1 (evenSite δ (s j)).1 ≤ 8 ∧
+          _root_.hammingDist (evenSite δ (s i)).2 (evenSite δ (s j)).2 ≤ 2 * Rloc n δ) := by
       intro i j hij hnear
       rcases lt_or_gt_of_ne hij with hlt | hgt
       · apply hsep j i hlt
@@ -1532,12 +1532,12 @@ theorem d8b_even_separated (M : MenuData n N E X Y G ζ δ κ) (σ : MaskStrateg
       · apply hsep i j hgt
         exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, ⟨by
           calc
-            hammingDist (evenSite δ (s j)).1 (evenSite δ (s i)).1 =
-                hammingDist (evenSite δ (s i)).1 (evenSite δ (s j)).1 := hammingDist_comm _ _
+            _root_.hammingDist (evenSite δ (s j)).1 (evenSite δ (s i)).1 =
+                _root_.hammingDist (evenSite δ (s i)).1 (evenSite δ (s j)).1 := _root_.hammingDist_comm _ _
             _ ≤ 8 := hnear.1, by
           calc
-            hammingDist (evenSite δ (s j)).2 (evenSite δ (s i)).2 =
-                hammingDist (evenSite δ (s i)).2 (evenSite δ (s j)).2 := hammingDist_comm _ _
+            _root_.hammingDist (evenSite δ (s j)).2 (evenSite δ (s i)).2 =
+                _root_.hammingDist (evenSite δ (s i)).2 (evenSite δ (s j)).2 := _root_.hammingDist_comm _ _
             _ ≤ 2 * Rloc n δ + 16 := hnear.2.trans (by omega)⟩⟩
     have hGDis : ∀ i ∈ (Finset.univ : Finset (Fin m)), ∀ j ∈ Finset.univ,
         i ≠ j → Disjoint (incGroups (δ := δ) (s i)) (incGroups (δ := δ) (s j)) := by
@@ -1671,6 +1671,7 @@ theorem d8b_even_separated (M : MenuData n N E X Y G ζ δ κ) (σ : MaskStrateg
     simpa only [FinProb.expect, one_pow, one_mul] using hDrop.trans_eq hFactor
   )
 
+set_option maxHeartbeats 1200000 in
 /-- **d8c** (10:119–121, 10:263; ~300 lines; new formal argument, the tag part
 of the input domain): comparison means read only tags within special distance 4. -/
 theorem d8c_tag_locality (M : MenuData n N E X Y G ζ δ κ) (σ : MaskStrategy M)
@@ -1679,7 +1680,197 @@ theorem d8c_tag_locality (M : MenuData n N E X Y G ζ δ κ) (σ : MaskStrategy 
       (tagNbhd δ (groupOf δ b).1)) ∧
     (∀ x a, FinProb.DependsOn (fun t : Slice n δ → M.I => evenMean M t σ x a)
       (tagNbhd δ (evenSite δ a).1)) := by
-  sorry
+  exact (open HypercubeRamsey.Lane_sol_s10_d8 in by
+    classical
+    have hgroup : ∀ (t t' : Slice n δ → M.I),
+      ∀ (q : Site n δ) (h h' : History n N δ)
+      (hP : ∀ c ∈ idDomain δ q 3 ((hp n δ).Rlong + (hp n δ).r + 9), h.pos c = h'.pos c)
+      (hW : ∀ c ∈ idDomain δ q 3 ((hp n δ).Rlong + (hp n δ).r + 9), h.tup c = h'.tup c)
+      (hS : ∀ s ∈ siteDomain q 2 ((hp n δ).Rlong + (hp n δ).r + 9), h.mask s = h'.mask s)
+      (hA : ∀ c ∈ idDomain δ q 3 ((hp n δ).Rlong + (hp n δ).r + 9), h.act c = h'.act c)
+      (hτ : ∀ c ∈ idDomain δ q 3 ((hp n δ).Rlong + (hp n δ).r + 9), h.tie c = h'.tie c)
+      (hT : ∀ z, _root_.hammingDist q.1 z ≤ 3 → t z = t' z),
+      (groupValid M t h q = groupValid M t' h' q) ∧
+      (clusterLaw M t h q = clusterLaw M t' h' q) ∧
+      (∀ b, groupOf δ b = q → ∀ c, labLaw M t h b c = labLaw M t' h' b c) ∧
+      (lists h q = lists h' q) ∧
+      (∀ s ∈ siteDomain q 1 3, selected M t h s = selected M t' h' s) ∧
+      (∀ c ∈ candidates h q, h.tup c = h'.tup c) := by
+      intro t t'
+      s10_d8_group_tags_eq n δ M t t'
+    have hEven : ∀ (t t' : Slice n δ → M.I),
+      ∀ (a : EvenRole n) (h h' : History n N δ)
+      (hP : ∀ c ∈ idDomain δ (evenSite δ a) 4 (Rloc n δ), h.pos c = h'.pos c)
+      (hW : ∀ c ∈ idDomain δ (evenSite δ a) 4 (Rloc n δ), h.tup c = h'.tup c)
+      (hS : ∀ s ∈ siteDomain (evenSite δ a) 3 (Rloc n δ), h.mask s = h'.mask s)
+      (hA : ∀ c ∈ idDomain δ (evenSite δ a) 4 (Rloc n δ), h.act c = h'.act c)
+      (hτ : ∀ c ∈ idDomain δ (evenSite δ a) 4 (Rloc n δ), h.tie c = h'.tie c)
+      (hT : ∀ z, _root_.hammingDist (evenSite δ a).1 z ≤ 4 → t z = t' z),
+      (∀ ω ω', (∀ b ∈ starOf a, ω b = ω' b) → ∀ x,
+        evenRow M t h ω a x = evenRow M t' h' ω' a x) ∧
+      (∀ q ∈ incGroups a, clusterLaw M t h q = clusterLaw M t' h' q ∧
+        ∀ b, groupOf δ b = q → ∀ c, labLaw M t h b c = labLaw M t' h' b c) := by
+      intro t t'
+      s10_d8_even_tags_eq n δ M t t' hgroup
+    letI : ∀ i, Fintype (PrimitiveField n (mS n δ) (kT n δ) N δ i) :=
+      primitiveFieldFintype n (mS n δ) (kT n δ) N δ
+    let e := historyEquiv n (mS n δ) (kT n δ) N δ
+    let Pfield (u : Slice n δ → M.I) : ∀ i : PrimitiveIndex n (mS n δ) δ,
+        FinProb (PrimitiveField n (mS n δ) (kT n δ) N δ i) := fun i => match i with
+      | .inl (.inl (.inl (.inl _))) => FinProb.bernoulli ((hp n δ).lam / ((hp n δ).V : ℝ))
+      | .inl (.inl (.inl (.inr c))) => p10_1kBlockTupleArrayLaw (M.μ (u c.1))
+      | .inl (.inl (.inr q)) => σ u q
+      | .inl (.inr _) => FinProb.bernoulli (((hp n δ).n : ℝ) ^ (hp n δ).b₀ / (hp n δ).lam)
+      | .inr _ => (show FinProb (hp n δ).TiePerm from FinProb.uniformAll ⟨1⟩)
+    have hweights : ∀ u (h : History n N δ), (FinProb.pi (Pfield u)).w (e h) = (historyLaw M σ u).w h := by
+      intro u h
+      change (∏ i, (Pfield u i).w (e h i)) = (historyLaw M σ u).w h
+      simp only [Fintype.prod_sum_type]
+      rfl
+    have hpack (u) (f : History n N δ → ℝ) :
+        (FinProb.pi (Pfield u)).expect (fun ω => f (e.symm ω)) = (historyLaw M σ u).expect f :=
+      expect_equiv (historyLaw M σ u) (FinProb.pi (Pfield u)) e (hweights u) f
+    let D := fun q : Site n δ => readDomain n (mS n δ) δ q 4 3 (Rloc n δ)
+    have hR : (hp n δ).Rlong + (hp n δ).r + 9 ≤ Rloc n δ := by
+      exact (show (hp n δ).Rlong + (hp n δ).r + 9 ≤ (hp n δ).Rlong + (hp n δ).r + 12 by omega).trans
+        (common_radius_bound n (mS n δ) δ)
+    have hPQ : ∀ q t t', (∀ z, _root_.hammingDist q.1 z ≤ 4 → t z = t' z) →
+        ∀ i ∈ D q, Pfield t i = Pfield t' i := by
+      intro q t t' ht i hi
+      have hi' := (Finset.mem_filter.mp hi).2
+      rcases i with (((c | c) | s) | c) | c
+      · rfl
+      · change p10_1kBlockTupleArrayLaw (M.μ (t c.1)) = p10_1kBlockTupleArrayLaw (M.μ (t' c.1))
+        rw [ht c.1 (mem_siteDomain.mp hi').1]
+      · change σ t s = σ t' s
+        apply hσ.local_tags s t t'
+        intro z hz
+        apply ht z
+        have hs := (mem_siteDomain.mp hi').1
+        have hz' := (Finset.mem_filter.mp hz).2
+        calc
+          _root_.hammingDist q.1 z ≤ _root_.hammingDist q.1 s.1 + _root_.hammingDist s.1 z :=
+            _root_.hammingDist_triangle _ _ _
+          _ = _root_.hammingDist q.1 s.1 + _root_.hammingDist z s.1 :=
+            congrArg (fun r : ℕ => _root_.hammingDist q.1 s.1 + r) (_root_.hammingDist_comm _ _)
+          _ ≤ 4 := Nat.add_le_add hs hz'
+      · rfl
+      · rfl
+    have hCompare (q) (t t') (ht : ∀ z, _root_.hammingDist q.1 z ≤ 4 → t z = t' z)
+        (f g : History n N δ → ℝ)
+        (hf : FinProb.DependsOn (fun ω => f (e.symm ω)) (D q))
+        (hfg : ∀ h, f h = g h) :
+        (historyLaw M σ t).expect f = (historyLaw M σ t').expect g := by
+      calc
+        _ = (FinProb.pi (Pfield t)).expect (fun ω => f (e.symm ω)) := (hpack t f).symm
+        _ = (FinProb.pi (Pfield t')).expect (fun ω => f (e.symm ω)) :=
+          pi_expect_congr_local _ _ (D q) _ hf (hPQ q t t' ht)
+        _ = (FinProb.pi (Pfield t')).expect (fun ω => g (e.symm ω)) :=
+          congrArg (FinProb.expect _) (funext fun ω => hfg (e.symm ω))
+        _ = _ := hpack t' g
+    have hOdd : ∀ t t' (q : Site n δ) (h h' : History n N δ)
+        (hP : ∀ c ∈ idDomain δ q 4 (Rloc n δ), h.pos c = h'.pos c)
+        (hW : ∀ c ∈ idDomain δ q 4 (Rloc n δ), h.tup c = h'.tup c)
+        (hS : ∀ s ∈ siteDomain q 3 (Rloc n δ), h.mask s = h'.mask s)
+        (hA : ∀ c ∈ idDomain δ q 4 (Rloc n δ), h.act c = h'.act c)
+        (hτ : ∀ c ∈ idDomain δ q 4 (Rloc n δ), h.tie c = h'.tie c)
+        (hT : ∀ z, _root_.hammingDist q.1 z ≤ 4 → t z = t' z),
+        ∀ b, groupOf δ b = q → ∀ y, oddRow M t h b y = oddRow M t' h' b y := by
+      intro t t' q h h' hP hW hS hA hτ hT b hb y
+      have hId : idDomain δ q 3 ((hp n δ).Rlong + (hp n δ).r + 9) ⊆ idDomain δ q 4 (Rloc n δ) := by
+        intro c hc
+        exact mem_idDomain.mpr (siteDomain_mono (by omega) hR (mem_idDomain.mp hc))
+      have hSite : siteDomain q 2 ((hp n δ).Rlong + (hp n δ).r + 9) ⊆ siteDomain q 3 (Rloc n δ) :=
+        siteDomain_mono (by omega) hR
+      obtain ⟨hv, hc, hl, _⟩ := hgroup t t' q h h'
+        (fun c hc => hP c (hId hc)) (fun c hc => hW c (hId hc))
+        (fun s hs => hS s (hSite hs)) (fun c hc => hA c (hId hc))
+        (fun c hc => hτ c (hId hc)) (fun z hz => hT z (hz.trans (by omega)))
+      simp only [oddRow, hb, hv, hc, hl b hb]
+    have hmem : ∀ (a : EvenRole n) (b : OddRole n), b ∈ starOf a → groupOf δ b ∈ incGroups a := by
+      intro a b hb
+      exact (p10_1k_mem_incidentOddGroups (mS_le n δ) a _).mpr
+        ⟨b, (Finset.mem_filter.mp hb).2, rfl⟩
+    have hRowLabel : ∀ t a h x, FinProb.DependsOn (fun ω => evenRow M t h ω a x) (starOf a) := by
+      intro t a h x ω ω' hω
+      exact (hEven t t a h h (fun _ _ => rfl) (fun _ _ => rfl)
+        (fun _ _ => rfl) (fun _ _ => rfl) (fun _ _ => rfl) (fun _ _ => rfl)).1 ω ω' hω x
+    have hKernel : ∀ t t' a h h'
+        (hP : ∀ c ∈ idDomain δ (evenSite δ a) 4 (Rloc n δ), h.pos c = h'.pos c)
+        (hW : ∀ c ∈ idDomain δ (evenSite δ a) 4 (Rloc n δ), h.tup c = h'.tup c)
+        (hS : ∀ q ∈ siteDomain (evenSite δ a) 3 (Rloc n δ), h.mask q = h'.mask q)
+        (hA : ∀ c ∈ idDomain δ (evenSite δ a) 4 (Rloc n δ), h.act c = h'.act c)
+        (hτ : ∀ c ∈ idDomain δ (evenSite δ a) 4 (Rloc n δ), h.tie c = h'.tie c)
+        (hT : ∀ z, _root_.hammingDist (evenSite δ a).1 z ≤ 4 → t z = t' z),
+        ∀ x,
+        (FinProb.pi (clusterLaw M t h)).expect (fun c =>
+          (FinProb.pi (fun b => labLaw M t h b (c (groupOf δ b)))).expect
+            (fun ω => evenRow M t h ω a x)) =
+        (FinProb.pi (clusterLaw M t' h')).expect (fun c =>
+          (FinProb.pi (fun b => labLaw M t' h' b (c (groupOf δ b)))).expect
+            (fun ω => evenRow M t' h' ω a x)) := by
+      intro t t' a h h' hP hW hS hA hτ hT x
+      let J := fun (u : Slice n δ → M.I) (v : History n N δ) (c : Site n δ → ClIdx M) =>
+        (FinProb.pi (fun b => labLaw M u v b (c (groupOf δ b)))).expect (fun ω => evenRow M u v ω a x)
+      have hJ : FinProb.DependsOn (J t h) (incGroups a) := by
+        intro c c' hc
+        apply pi_expect_congr_local _ _ (starOf a) _ (hRowLabel t a h x)
+        intro b hb
+        rw [hc _ (hmem a b hb)]
+      have H := hEven t t' a h h' hP hW hS hA hτ hT
+      calc
+        _ = (FinProb.pi (clusterLaw M t' h')).expect (J t h) :=
+          pi_expect_congr_local _ _ (incGroups a) _ hJ (fun q hq => (H.2 q hq).1)
+        _ = _ := by
+          apply congrArg (FinProb.expect _)
+          funext c
+          calc
+            J t h c = (FinProb.pi (fun b => labLaw M t' h' b (c (groupOf δ b)))).expect
+                (fun ω => evenRow M t h ω a x) := by
+              apply pi_expect_congr_local _ _ (starOf a) _ (hRowLabel t a h x)
+              intro b hb
+              exact (H.2 _ (hmem a b hb)).2 b rfl _
+            _ = _ := congrArg (FinProb.expect _) (funext fun ω => H.1 ω ω (fun _ _ => rfl) x)
+    constructor
+    · intro y b t t' ht
+      have hT : ∀ z, _root_.hammingDist (groupOf δ b).1 z ≤ 4 → t z = t' z :=
+        fun z hz => ht z (Finset.mem_filter.mpr ⟨Finset.mem_univ _, hz⟩)
+      have hLocal : FinProb.DependsOn (fun ω => oddRow M t (e.symm ω) b y) (D (groupOf δ b)) := by
+        intro ω ω' hω
+        let h := e.symm ω
+        let h' := e.symm ω'
+        have hAgree : ∀ j ∈ D (groupOf δ b), e h j = e h' j := by
+          intro j hj
+          simpa only [h, h', Equiv.apply_symm_apply] using hω j hj
+        have H := (historyRead_agree n (mS n δ) (kT n δ) N δ).mp hAgree
+        exact hOdd t t (groupOf δ b) h h' H.1 H.2.1 H.2.2.1 H.2.2.2.1 H.2.2.2.2 (fun _ _ => rfl) b rfl y
+      unfold oddMean
+      apply congrArg (fun z : ℝ => (N : ℝ) * z)
+      exact hCompare (groupOf δ b) t t' hT _ _ hLocal (fun h =>
+        hOdd t t' (groupOf δ b) h h (fun _ _ => rfl) (fun _ _ => rfl) (fun _ _ => rfl)
+          (fun _ _ => rfl) (fun _ _ => rfl) hT b rfl y)
+    · intro x a t t' ht
+      have hT : ∀ z, _root_.hammingDist (evenSite δ a).1 z ≤ 4 → t z = t' z :=
+        fun z hz => ht z (Finset.mem_filter.mpr ⟨Finset.mem_univ _, hz⟩)
+      let K := fun (u : Slice n δ → M.I) (h : History n N δ) =>
+        (FinProb.pi (clusterLaw M u h)).expect (fun c =>
+          (FinProb.pi (fun b => labLaw M u h b (c (groupOf δ b)))).expect
+            (fun ω => evenRow M u h ω a x))
+      have hLocal : FinProb.DependsOn (fun ω => K t (e.symm ω)) (D (evenSite δ a)) := by
+        intro ω ω' hω
+        let h := e.symm ω
+        let h' := e.symm ω'
+        have hAgree : ∀ j ∈ D (evenSite δ a), e h j = e h' j := by
+          intro j hj
+          simpa only [h, h', Equiv.apply_symm_apply] using hω j hj
+        have H := (historyRead_agree n (mS n δ) (kT n δ) N δ).mp hAgree
+        exact hKernel t t a h h' H.1 H.2.1 H.2.2.1 H.2.2.2.1 H.2.2.2.2 (fun _ _ => rfl) x
+      change (N : ℝ) * (historyLaw M σ t).expect (K t) = (N : ℝ) * (historyLaw M σ t').expect (K t')
+      apply congrArg (fun z : ℝ => (N : ℝ) * z)
+      exact hCompare (evenSite δ a) t t' hT _ _ hLocal (fun h =>
+        hKernel t t' a h h (fun _ _ => rfl) (fun _ _ => rfl) (fun _ _ => rfl)
+          (fun _ _ => rfl) (fun _ _ => rfl) hT x)
+  )
 
 /-- **d8d** (10:39, 10:267, 10:271; ~300 lines; lemma-level counting): the near
 fractions. Residual: special ball of radius 8 times a residual ball of radius

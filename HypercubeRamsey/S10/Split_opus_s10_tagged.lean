@@ -1355,6 +1355,7 @@ theorem d8d_near_fractions (δ : ℝ) (hδ : 0 < δ) (hδsmall : δ < 1 / 2000) 
       tagFracOf n δ ≤ ((mS n δ : ℝ) + 1) ^ 9 / 2 ^ (mS n δ) := by
   sorry
 
+set_option maxHeartbeats 3000000
 /-- **d9** (10:265; ~300 lines; lemma-level: `balanced_mixture`-type separation on
 the expected slice terms, which are sub-probability vectors supported on the tag's
 own patch). The one-slice balanced response with constant `4/κ`. -/
@@ -1373,7 +1374,977 @@ theorem d9_balanced_response (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ : 
               ((Fintype.card (Slice n δ) : ℝ) / Fintype.card (EvenRole n) *
                 ∑ a ∈ Finset.univ.filter (fun a => (evenSite δ a).1 = j), evenMean M τ σ x a)
             ≤ 4 / κ) := by
-  sorry
+  classical
+  refine ⟨2, ?_⟩
+  intro n hn N E X Y G M σ hN hσ j q hq0 hqsum
+  have hnpos : 0 < n := by omega
+  have hdelta200 : 200 * δ < 1 := by
+    have hsmall : δ < (1 : ℝ) / 2000 := lt_of_lt_of_le hδsmall
+      (div_le_div_of_nonneg_right (min_le_right (min η₀ ζ) 1) (by norm_num))
+    nlinarith
+  have hmcast :
+      (p10_1kSpecialCount n δ : ℝ) ≤ (n : ℝ) ^ (200 * δ) := by
+    dsimp [p10_1kSpecialCount]
+    exact Nat.floor_le (by positivity)
+  have hpowlt : (n : ℝ) ^ (200 * δ) < (n : ℝ) := by
+    calc
+      (n : ℝ) ^ (200 * δ) < (n : ℝ) ^ (1 : ℝ) :=
+        Real.rpow_lt_rpow_of_exponent_lt (by exact_mod_cast (show 1 < n by omega)) hdelta200
+      _ = (n : ℝ) := by rw [Real.rpow_one]
+  have hspeciallt : p10_1kSpecialCount n δ < n := by
+    exact_mod_cast lt_of_le_of_lt hmcast hpowlt
+  have hmstrict : mS n δ < n := lt_of_le_of_lt (min_le_left _ _) hspeciallt
+  have hm : mS n δ ≤ n := mS_le n δ
+  let r := n - mS n δ
+  have hrpos : 0 < r := by dsimp [r]; omega
+  have hEvenParityFlip : ∀ u v : CubeVertex n, _root_.hammingDist u v = 1 →
+      (IsEvenRole v ↔ ¬ IsEvenRole u) := by
+    intro u v h
+    exact HypercubeRamsey.Lane_q_s10_d4.parity_flip_of_hammingDist_one u v h
+  have hOddParityFlip : ∀ u v : CubeVertex n, _root_.hammingDist u v = 1 →
+      ((¬ IsEvenRole v) ↔ ¬ (¬ IsEvenRole u)) := by
+    intro u v h
+    have hflip := hEvenParityFlip u v h
+    tauto
+  have hOddFiber :
+      (Finset.univ.filter fun b : OddRole n => (groupOf δ b).1 = j).card ≤
+        2 ^ (n - mS n δ - 1) := by
+    have h := HypercubeRamsey.Lane_q_s10_d4.slice_parity_fiber_card_le
+      (mS_le n δ) hmstrict j (fun v : CubeVertex n => ¬ IsEvenRole v) hOddParityFlip
+    let e : {b : OddRole n // (groupOf δ b).1 = j} ≃
+        {v : CubeVertex n // ¬ IsEvenRole v ∧
+          p10_1kSpecialSlice (mS_le n δ) v = j} := {
+      toFun := fun b => ⟨b.1.1, b.1.2, by
+        simpa [groupOf, Site, p10_1kProjectedVertex] using b.2⟩
+      invFun := fun v => ⟨⟨v.1, v.2.1⟩, by
+        simpa [groupOf, Site, p10_1kProjectedVertex] using v.2.2⟩
+      left_inv := by intro b; apply Subtype.ext; apply Subtype.ext; rfl
+      right_inv := by intro v; apply Subtype.ext; rfl
+    }
+    calc
+      (Finset.univ.filter fun b : OddRole n => (groupOf δ b).1 = j).card =
+          Fintype.card {b : OddRole n // (groupOf δ b).1 = j} := by
+            symm
+            exact Fintype.card_of_subtype
+              (Finset.univ.filter fun b : OddRole n => (groupOf δ b).1 = j)
+              (by intro b; simp)
+      _ = Fintype.card {v : CubeVertex n // ¬ IsEvenRole v ∧
+            p10_1kSpecialSlice (mS_le n δ) v = j} := Fintype.card_congr e
+      _ ≤ 2 ^ (n - mS n δ - 1) := h
+  have hEvenFiber :
+      (Finset.univ.filter fun a : EvenRole n => (evenSite δ a).1 = j).card ≤
+        2 ^ (n - mS n δ - 1) := by
+    have h := HypercubeRamsey.Lane_q_s10_d4.slice_parity_fiber_card_le
+      (mS_le n δ) hmstrict j (fun v : CubeVertex n => IsEvenRole v) hEvenParityFlip
+    let e : {a : EvenRole n // (evenSite δ a).1 = j} ≃
+        {v : CubeVertex n // IsEvenRole v ∧
+          p10_1kSpecialSlice (mS_le n δ) v = j} := {
+      toFun := fun a => ⟨a.1.1, a.1.2, by
+        simpa [evenSite, Site, p10_1kProjectedVertex] using a.2⟩
+      invFun := fun v => ⟨⟨v.1, v.2.1⟩, by
+        simpa [evenSite, Site, p10_1kProjectedVertex] using v.2.2⟩
+      left_inv := by intro a; apply Subtype.ext; apply Subtype.ext; rfl
+      right_inv := by intro v; apply Subtype.ext; rfl
+    }
+    calc
+      (Finset.univ.filter fun a : EvenRole n => (evenSite δ a).1 = j).card =
+          Fintype.card {a : EvenRole n // (evenSite δ a).1 = j} := by
+            symm
+            exact Fintype.card_of_subtype
+              (Finset.univ.filter fun a : EvenRole n => (evenSite δ a).1 = j)
+              (by intro a; simp)
+      _ = Fintype.card {v : CubeVertex n // IsEvenRole v ∧
+            p10_1kSpecialSlice (mS_le n δ) v = j} := Fintype.card_congr e
+      _ ≤ 2 ^ (n - mS n δ - 1) := h
+  have hParity := HypercubeRamsey.Lane_q_s10_d4.parity_subtype_card hnpos
+  have hEvenRoleCard : Fintype.card (EvenRole n) = 2 ^ (n - 1) := by
+    exact hParity.1
+  have hOddRoleCard : Fintype.card (OddRole n) = 2 ^ (n - 1) := by
+    exact hParity.2
+  have hSliceCard : Fintype.card (Slice n δ) = 2 ^ mS n δ := by simp [Slice]
+  have hSliceCardR : (Fintype.card (Slice n δ) : ℝ) = (2 : ℝ) ^ mS n δ := by
+    exact_mod_cast hSliceCard
+  have hOddRoleCardR : (Fintype.card (OddRole n) : ℝ) = (2 : ℝ) ^ (n - 1) := by
+    exact_mod_cast hOddRoleCard
+  have hEvenRoleCardR : (Fintype.card (EvenRole n) : ℝ) = (2 : ℝ) ^ (n - 1) := by
+    exact_mod_cast hEvenRoleCard
+  have hpowerProd : (2 : ℝ) ^ mS n δ * (2 : ℝ) ^ (n - mS n δ - 1) =
+      (2 : ℝ) ^ (n - 1) := by
+    have hexp : mS n δ + (n - mS n δ - 1) = n - 1 := by omega
+    rw [← Real.rpow_natCast, ← Real.rpow_natCast]
+    have hnat : (2 : ℕ) ^ (mS n δ + (n - mS n δ - 1)) = (2 : ℕ) ^ (n - 1) := by
+      rw [hexp]
+    exact_mod_cast (by simpa [pow_add] using hnat)
+  let oddFiber : Finset (OddRole n) :=
+    Finset.univ.filter fun b => (groupOf δ b).1 = j
+  let evenFiber : Finset (EvenRole n) :=
+    Finset.univ.filter fun a => (evenSite δ a).1 = j
+  let oddScale : ℝ := (Fintype.card (Slice n δ) : ℝ) / Fintype.card (OddRole n)
+  let evenScale : ℝ := (Fintype.card (Slice n δ) : ℝ) / Fintype.card (EvenRole n)
+  have hoddScaleNonneg : 0 ≤ oddScale := by
+    dsimp [oddScale]
+    positivity
+  have hevenScaleNonneg : 0 ≤ evenScale := by
+    dsimp [evenScale]
+    positivity
+  have hoddScaleCard : oddScale * (oddFiber.card : ℝ) ≤ 1 := by
+    have hcardR : (oddFiber.card : ℝ) ≤ (2 : ℝ) ^ (n - mS n δ - 1) := by
+      exact_mod_cast (show oddFiber.card ≤ 2 ^ (n - mS n δ - 1) by
+        simpa [oddFiber] using hOddFiber)
+    have hnum : (2 : ℝ) ^ mS n δ * (oddFiber.card : ℝ) ≤
+        (2 : ℝ) ^ (n - 1) := by
+      calc
+        (2 : ℝ) ^ mS n δ * (oddFiber.card : ℝ) ≤
+            (2 : ℝ) ^ mS n δ * (2 : ℝ) ^ (n - mS n δ - 1) :=
+          mul_le_mul_of_nonneg_left hcardR (by positivity)
+        _ = (2 : ℝ) ^ (n - 1) := hpowerProd
+    dsimp [oddScale]
+    rw [hSliceCardR, hOddRoleCardR]
+    calc
+      ((2 : ℝ) ^ mS n δ / (2 : ℝ) ^ (n - 1)) * oddFiber.card =
+          ((2 : ℝ) ^ mS n δ * (oddFiber.card : ℝ)) / (2 : ℝ) ^ (n - 1) := by ring
+      _ ≤ 1 := (div_le_one (by positivity)).2 hnum
+  have hevenScaleCard : evenScale * (evenFiber.card : ℝ) ≤ 1 := by
+    have hcardR : (evenFiber.card : ℝ) ≤ (2 : ℝ) ^ (n - mS n δ - 1) := by
+      exact_mod_cast (show evenFiber.card ≤ 2 ^ (n - mS n δ - 1) by
+        simpa [evenFiber] using hEvenFiber)
+    have hnum : (2 : ℝ) ^ mS n δ * (evenFiber.card : ℝ) ≤
+        (2 : ℝ) ^ (n - 1) := by
+      calc
+        (2 : ℝ) ^ mS n δ * (evenFiber.card : ℝ) ≤
+            (2 : ℝ) ^ mS n δ * (2 : ℝ) ^ (n - mS n δ - 1) :=
+          mul_le_mul_of_nonneg_left hcardR (by positivity)
+        _ = (2 : ℝ) ^ (n - 1) := hpowerProd
+    dsimp [evenScale]
+    rw [hSliceCardR, hEvenRoleCardR]
+    calc
+      ((2 : ℝ) ^ mS n δ / (2 : ℝ) ^ (n - 1)) * evenFiber.card =
+          ((2 : ℝ) ^ mS n δ * (evenFiber.card : ℝ)) / (2 : ℝ) ^ (n - 1) := by ring
+      _ ≤ 1 := (div_le_one (by positivity)).2 hnum
+  have oddRowMass (τ : Slice n δ → M.I) (h : History n N δ) (b : OddRole n) :
+      ∑ y, oddRow M τ h b y ≤ 1 := by
+    unfold oddRow
+    split_ifs with hvalid
+    · let CP : FinProb (ClIdx M) := clusterLaw M τ h (groupOf δ b)
+      exact HypercubeRamsey.Lane_q_s10_d4.expect_vector_mass_le CP
+        (fun c : ClIdx M => fun y => (labLaw M τ h b c).w y)
+        (by intro (c : ClIdx M); exact le_of_eq (labLaw M τ h b c).sum_eq_one)
+    · simp
+  have evenRowMass (τ : Slice n δ → M.I) (h : History n N δ)
+      (ω : OddRole n → Fin N) (a : EvenRole n) :
+      ∑ x, evenRow M τ h ω a x ≤ 1 := by
+    classical
+    unfold evenRow
+    cases hc : centerOf M τ h a with
+    | none => simp [hc]
+    | some c =>
+      by_cases hp : predOK M τ h a c ω
+      · have hlight : 0 < lightMass M τ h a c ω := hp.2.2.2
+        have hnum :
+            (∑ x, if x ∉ heavy M τ h a c ω then
+              avgMarginal M τ h a c ω x else 0) =
+              ∑ x ∈ Finset.univ \ heavy M τ h a c ω,
+                avgMarginal M τ h a c ω x := by
+          symm
+          calc
+            (∑ x ∈ Finset.univ \ heavy M τ h a c ω,
+                avgMarginal M τ h a c ω x) =
+                ∑ x ∈ Finset.univ.filter (fun x => x ∉ heavy M τ h a c ω),
+                  avgMarginal M τ h a c ω x := by
+              congr 1
+              ext x
+              simp
+            _ = ∑ x, if x ∉ heavy M τ h a c ω then
+                  avgMarginal M τ h a c ω x else 0 := by
+              rw [Finset.sum_filter]
+        have hsum :
+            (∑ x, if x ∉ heavy M τ h a c ω then
+              avgMarginal M τ h a c ω x / lightMass M τ h a c ω else 0) = 1 := by
+          calc
+            _ = (∑ x ∈ Finset.univ \ heavy M τ h a c ω,
+                avgMarginal M τ h a c ω x) / lightMass M τ h a c ω := by
+              calc
+                (∑ x, if x ∉ heavy M τ h a c ω then
+                    avgMarginal M τ h a c ω x / lightMass M τ h a c ω else 0) =
+                    (∑ x, if x ∉ heavy M τ h a c ω then
+                      avgMarginal M τ h a c ω x else 0) /
+                      lightMass M τ h a c ω := by
+                        rw [Finset.sum_div]
+                        apply Finset.sum_congr rfl
+                        intro x hx
+                        by_cases hnot : x ∉ heavy M τ h a c ω <;> simp [hnot]
+                _ = _ := by rw [hnum]
+            _ = 1 := by
+              rw [lightMass]
+              exact div_self (ne_of_gt hlight)
+        simpa [evenRow, hc, hp] using hsum.le
+      · simp [evenRow, hc, hp]
+  have oddMeanMass (τ : Slice n δ → M.I) (b : OddRole n) :
+      ∑ y, oddMean M τ σ y b ≤ (N : ℝ) := by
+    let H : FinProb (History n N δ) := historyLaw M σ τ
+    have hmass :
+        ∑ y, H.expect (fun h => oddRow M τ h b y) ≤ 1 :=
+    HypercubeRamsey.Lane_q_s10_d4.expect_vector_mass_le H
+      (fun h y => oddRow M τ h b y) (fun h => oddRowMass τ h b)
+    change ∑ y, (N : ℝ) * H.expect (fun h => oddRow M τ h b y) ≤ (N : ℝ)
+    calc
+      ∑ y, (N : ℝ) * H.expect (fun h => oddRow M τ h b y) =
+          (N : ℝ) * ∑ y, H.expect (fun h => oddRow M τ h b y) := by rw [Finset.mul_sum]
+      _ ≤ (N : ℝ) * 1 := mul_le_mul_of_nonneg_left hmass (by positivity)
+      _ = (N : ℝ) := by ring
+  have evenMeanMass (τ : Slice n δ → M.I) (a : EvenRole n) :
+      ∑ x, evenMean M τ σ x a ≤ (N : ℝ) := by
+    let H : FinProb (History n N δ) := historyLaw M σ τ
+    have hlabelMass (h : History n N δ) (c : Site n δ → ClIdx M) :
+        ∑ x, (FinProb.pi (fun b => labLaw M τ h b (c (groupOf δ b)))).expect
+          (fun ω => evenRow M τ h ω a x) ≤ 1 := by
+      exact HypercubeRamsey.Lane_q_s10_d4.expect_vector_mass_le
+        (FinProb.pi (fun b => labLaw M τ h b (c (groupOf δ b))))
+        (fun ω x => evenRow M τ h ω a x) (fun ω => evenRowMass τ h ω a)
+    have hclusterMass (h : History n N δ) :
+        ∑ x, (FinProb.pi (clusterLaw M τ h)).expect (fun c =>
+          (FinProb.pi (fun b => labLaw M τ h b (c (groupOf δ b)))).expect
+            (fun ω => evenRow M τ h ω a x)) ≤ 1 := by
+      exact HypercubeRamsey.Lane_q_s10_d4.expect_vector_mass_le (FinProb.pi (clusterLaw M τ h))
+        (fun c x => (FinProb.pi (fun b => labLaw M τ h b (c (groupOf δ b)))).expect
+          (fun ω => evenRow M τ h ω a x)) (hlabelMass h)
+    have hmass := HypercubeRamsey.Lane_q_s10_d4.expect_vector_mass_le H
+      (fun h x => (FinProb.pi (clusterLaw M τ h)).expect (fun c =>
+        (FinProb.pi (fun b => labLaw M τ h b (c (groupOf δ b)))).expect
+          (fun ω => evenRow M τ h ω a x))) hclusterMass
+    change ∑ x, (N : ℝ) * H.expect (fun h => (FinProb.pi (clusterLaw M τ h)).expect
+      (fun c => (FinProb.pi (fun b => labLaw M τ h b (c (groupOf δ b)))).expect
+        (fun ω => evenRow M τ h ω a x))) ≤ (N : ℝ)
+    calc
+      ∑ x, (N : ℝ) * H.expect (fun h => (FinProb.pi (clusterLaw M τ h)).expect
+          (fun c => (FinProb.pi (fun b => labLaw M τ h b (c (groupOf δ b)))).expect
+            (fun ω => evenRow M τ h ω a x))) =
+          (N : ℝ) * ∑ x, H.expect (fun h => (FinProb.pi (clusterLaw M τ h)).expect
+            (fun c => (FinProb.pi (fun b => labLaw M τ h b (c (groupOf δ b)))).expect
+              (fun ω => evenRow M τ h ω a x))) := by rw [Finset.mul_sum]
+      _ ≤ (N : ℝ) * 1 := mul_le_mul_of_nonneg_left hmass (by positivity)
+      _ = (N : ℝ) := by ring
+  have νzero_of_mix_zero (i : M.I) (y : Fin N)
+      (hν : (Law.mix (prior M i) (M.D i)).w y = 0)
+      (r : Fin (M.K i)) (hr : 0 < M.lam i r) : (M.D i r).w y = 0 := by
+    have hsum : ∑ r', M.lam i r' * (M.D i r').w y = 0 := by
+      simpa [Law.mix, prior] using hν
+    have hterm : 0 ≤ M.lam i r * (M.D i r).w y :=
+      mul_nonneg (M.lam_nonneg i r) ((M.D i r).nonneg y)
+    have hle : M.lam i r * (M.D i r).w y ≤ 0 := by
+      calc
+        M.lam i r * (M.D i r).w y ≤ ∑ r', M.lam i r' * (M.D i r').w y :=
+          Finset.single_le_sum (fun r' _ => mul_nonneg (M.lam_nonneg i r') ((M.D i r').nonneg y))
+            (Finset.mem_univ r)
+        _ = 0 := hsum
+    have hzero : M.lam i r * (M.D i r).w y = 0 := le_antisymm hle hterm
+    rcases mul_eq_zero.mp hzero with hLamZero | hD
+    · exact (hr.ne' hLamZero).elim
+    · exact hD
+  have maskedPriorZero (i : M.I) (S : Finset (Fin N)) (r : Fin (M.K i))
+      (hLam : M.lam i r = 0) : (maskedPrior M i S).w r = 0 := by
+    unfold maskedPrior
+    split_ifs with hp
+    · simp [FinProb.cond, prior, hLam]
+    · simp [prior, hLam]
+  have tiltWeightZero (τ : Slice n δ → M.I) (h : History n N δ)
+      (q : Site n δ) (r : Fin (M.K (τ q.1)))
+      (hLam : M.lam (τ q.1) r = 0) : tiltWeight M τ h q r = 0 := by
+    unfold tiltWeight
+    split_ifs <;> simp [maskedPriorZero, hLam]
+  have clusterTagZero (τ : Slice n δ → M.I) (h : History n N δ)
+      (q : Site n δ) (c : ClIdx M) (hc : c.1 ≠ τ q.1) :
+      (clusterLaw M τ h q).w c = 0 := by
+    unfold clusterLaw
+    split_ifs with hpos
+    · change (∑ r : Fin (M.K (τ q.1)),
+        if (⟨τ q.1, r⟩ : ClIdx M) = c then
+          (normalizeLaw (tiltWeight M τ h q) (tiltWeight_nonneg M τ h q) hpos.2).w r else 0) = 0
+      apply Finset.sum_eq_zero
+      intro r hr
+      have hne : (⟨τ q.1, r⟩ : ClIdx M) ≠ c := by
+        intro heq
+        exact hc (congrArg Sigma.fst heq).symm
+      simp [hne]
+    · change (∑ r : Fin (M.K (τ q.1)),
+        if (⟨τ q.1, r⟩ : ClIdx M) = c then
+          (maskedPrior M (τ q.1) (h.mask q)).w r else 0) = 0
+      apply Finset.sum_eq_zero
+      intro r hr
+      have hne : (⟨τ q.1, r⟩ : ClIdx M) ≠ c := by
+        intro heq
+        exact hc (congrArg Sigma.fst heq).symm
+      simp [hne]
+  have clusterWeightZero (τ : Slice n δ → M.I) (h : History n N δ)
+      (q : Site n δ) (r : Fin (M.K (τ q.1)))
+      (hLam : M.lam (τ q.1) r = 0) :
+      (clusterLaw M τ h q).w ⟨τ q.1, r⟩ = 0 := by
+    unfold clusterLaw
+    split_ifs with hpos
+    · simp [FinProb.map, normalizeLaw, tiltWeightZero, hLam]
+    · simp [FinProb.map, maskedPriorZero, hLam]
+  have maskedClusterZero (i : M.I) (S : Finset (Fin N))
+      (r : Fin (M.K i)) (y : Fin N) (hD : (M.D i r).w y = 0) :
+      (maskedCluster M i S r).w y = 0 := by
+    unfold maskedCluster
+    split_ifs with hmask
+    · unfold restrictOrSelf
+      split_ifs with hmass
+      · change (if y ∈ S then (M.D i r).w y / lawMassOn (M.D i r) S else 0) = 0
+        by_cases hy : y ∈ S <;> simp [hy, hD]
+      · exact hD
+    · exact hD
+  have labLawZero (τ : Slice n δ → M.I) (h : History n N δ)
+      (b : OddRole n) (c : ClIdx M) (y : Fin N)
+      (hD : (M.D c.1 c.2).w y = 0) : (labLaw M τ h b c).w y = 0 := by
+    unfold labLaw
+    split_ifs with hpass
+    · unfold restrictOrSelf
+      split_ifs with hmass
+      · change (if y ∈ hitSet M τ h (groupOf δ b) then
+            (maskedCluster M c.1 (h.mask (groupOf δ b)) c.2).w y /
+              lawMassOn (maskedCluster M c.1 (h.mask (groupOf δ b)) c.2)
+                (hitSet M τ h (groupOf δ b)) else 0) = 0
+        by_cases hy : y ∈ hitSet M τ h (groupOf δ b) <;>
+          simp [hy, maskedClusterZero c.1 (h.mask (groupOf δ b)) c.2 y hD]
+      · exact maskedClusterZero c.1 (h.mask (groupOf δ b)) c.2 y hD
+    · exact maskedClusterZero c.1 (h.mask (groupOf δ b)) c.2 y hD
+  have oddMeanZero (τ : Slice n δ → M.I) (y : Fin N) (b : OddRole n)
+      (i : M.I) (htag : τ (groupOf δ b).1 = i)
+      (hν : (Law.mix (prior M i) (M.D i)).w y = 0) :
+      oddMean M τ σ y b = 0 := by
+    subst i
+    have hrow : ∀ h : History n N δ, oddRow M τ h b y = 0 := by
+      intro h
+      unfold oddRow
+      split_ifs with hg
+      · unfold FinProb.expect
+        apply Finset.sum_eq_zero
+        intro c hc
+        by_cases htag' : c.1 = τ (groupOf δ b).1
+        · cases c with
+          | mk tag r =>
+            dsimp at htag'
+            subst tag
+            by_cases hLam0 : M.lam (τ (groupOf δ b).1) r = 0
+            · have hcw := clusterWeightZero τ h (groupOf δ b) r hLam0
+              simp [hcw]
+            · have hLamPos : 0 < M.lam (τ (groupOf δ b).1) r :=
+                lt_of_le_of_ne (M.lam_nonneg _ _) (Ne.symm hLam0)
+              have hD := νzero_of_mix_zero (τ (groupOf δ b).1) y hν r hLamPos
+              have hlab := labLawZero τ h b ⟨τ (groupOf δ b).1, r⟩ y
+                hD
+              simp [hlab]
+        · have hcw := clusterTagZero τ h (groupOf δ b) c htag'
+          simp [hcw]
+      · simp
+    have hexpect : (historyLaw M σ τ).expect (fun h => oddRow M τ h b y) = 0 := by
+      unfold FinProb.expect
+      apply Finset.sum_eq_zero
+      intro h hh
+      simp [hrow h]
+    unfold oddMean
+    rw [hexpect]
+    ring
+  have avgMarginalZero (τ : Slice n δ → M.I) (h : History n N δ)
+      (a : EvenRole n) (c : ID n δ) (ω : OddRole n → Fin N)
+      (x : Fin N) (i : M.I) (htag : τ c.1 = i)
+      (hμ : (M.μ i).w x = 0) : avgMarginal M τ h a c ω x = 0 := by
+    unfold avgMarginal
+    apply Finset.sum_eq_zero
+    intro w hw
+    by_cases hcontains : ∃ k, w k = x
+    · obtain ⟨k, hk⟩ := hcontains
+      have hprior : (tuplePrior M τ c).w w = 0 := by
+        rw [tuplePrior, p10_1kBlockTupleArrayLaw_weight]
+        apply Finset.prod_eq_zero (Finset.mem_univ k)
+        rw [hk, htag, hμ]
+      simp [posterior, hprior]
+    · have hcount : (Finset.univ.filter fun k : Fin (kT n δ) => w k = x).card = 0 := by
+        apply Finset.card_eq_zero.mpr
+        apply Finset.eq_empty_iff_forall_notMem.mpr
+        intro k hk
+        have hk' : w k = x := (Finset.mem_filter.mp hk).2
+        exact hcontains ⟨k, hk'⟩
+      simp [posterior, hcount]
+  have evenRowZero (τ : Slice n δ → M.I) (h : History n N δ)
+      (ω : OddRole n → Fin N) (a : EvenRole n) (x : Fin N) (i : M.I)
+      (htag : τ (evenSite δ a).1 = i) (hμ : (M.μ i).w x = 0) :
+      evenRow M τ h ω a x = 0 := by
+    cases hc : centerOf M τ h a with
+    | none => simp [evenRow, hc]
+    | some c =>
+      have hfirst : c.1 = (evenSite δ a).1 := by
+        unfold centerOf at hc
+        cases hs : selected M τ h (evenSite δ a) with
+        | none => simp [hs] at hc
+        | some loc => simp [hs] at hc; cases hc; rfl
+      have htag' : τ c.1 = i := by rw [hfirst]; exact htag
+      simp [evenRow, hc, avgMarginalZero τ h a c ω x i htag' hμ]
+  have evenMeanZero (τ : Slice n δ → M.I) (x : Fin N) (a : EvenRole n)
+      (i : M.I) (htag : τ (evenSite δ a).1 = i)
+      (hμ : (M.μ i).w x = 0) : evenMean M τ σ x a = 0 := by
+    have hexpect : (historyLaw M σ τ).expect (fun h =>
+        ∑ c : Site n δ → ClIdx M, (FinProb.pi (clusterLaw M τ h)).w c *
+          (FinProb.pi (fun b => labLaw M τ h b (c (groupOf δ b)))).expect
+            (fun ω => evenRow M τ h ω a x)) = 0 := by
+      unfold FinProb.expect
+      apply Finset.sum_eq_zero
+      intro h hh
+      have hcluster : (FinProb.pi (clusterLaw M τ h)).expect (fun c =>
+          (FinProb.pi (fun b => labLaw M τ h b (c (groupOf δ b)))).expect
+            (fun ω => evenRow M τ h ω a x)) = 0 := by
+        unfold FinProb.expect
+        apply Finset.sum_eq_zero
+        intro c hc
+        have hlab : (FinProb.pi (fun b => labLaw M τ h b (c (groupOf δ b)))).expect
+            (fun ω => evenRow M τ h ω a x) = 0 := by
+          unfold FinProb.expect
+          apply Finset.sum_eq_zero
+          intro ω hω
+          simp [evenRowZero τ h ω a x i htag hμ]
+        have hlabSum :
+            ∑ ω, (FinProb.pi (fun b => labLaw M τ h b (c (groupOf δ b)))).w ω *
+              evenRow M τ h ω a x = 0 := by
+          simpa only [FinProb.expect] using hlab
+        change (FinProb.pi (clusterLaw M τ h)).w c *
+          (∑ ω, (FinProb.pi (fun b => labLaw M τ h b (c (groupOf δ b)))).w ω *
+            evenRow M τ h ω a x) = 0
+        rw [hlabSum]
+        simp
+      have hclusterSum :
+          ∑ c, (FinProb.pi (clusterLaw M τ h)).w c *
+            (FinProb.pi (fun b => labLaw M τ h b (c (groupOf δ b)))).expect
+              (fun ω => evenRow M τ h ω a x) = 0 := by
+        simpa only [FinProb.expect] using hcluster
+      change (historyLaw M σ τ).w h *
+        (∑ c, (FinProb.pi (clusterLaw M τ h)).w c *
+          (FinProb.pi (fun b => labLaw M τ h b (c (groupOf δ b)))).expect
+            (fun ω => evenRow M τ h ω a x)) = 0
+      rw [hclusterSum]
+      simp
+    unfold evenMean
+    rw [hexpect]
+    ring
+  let qLaw : Slice n δ → FinProb M.I := fun z =>
+    ⟨q z, hq0 z, hqsum z⟩
+  let pointLaw (tag : M.I) : FinProb M.I := {
+    w := fun a => if a = tag then 1 else 0
+    nonneg := by intro a; split_ifs <;> norm_num
+    sum_eq_one := by simp
+  }
+  let profileLaw (tag : M.I) : FinProb (Slice n δ → M.I) :=
+    FinProb.pi (Function.update qLaw j (pointLaw tag))
+  let oddResponse (tag : M.I) (y : Fin N) : ℝ :=
+    oddScale * ∑ b ∈ oddFiber, (profileLaw tag).expect (fun τ => oddMean M τ σ y b)
+  let evenResponse (tag : M.I) (x : Fin N) : ℝ :=
+    evenScale * ∑ a ∈ evenFiber, (profileLaw tag).expect (fun τ => evenMean M τ σ x a)
+  let coordResponse (tag : M.I) : Sum (Fin N) (Fin N) → ℝ :=
+    Sum.elim (oddResponse tag) (evenResponse tag)
+  have starLik_nonneg (τ : Slice n δ → M.I) (h : History n N δ)
+      (a : EvenRole n) (ω : OddRole n → Fin N) :
+      0 ≤ starLik M τ h a ω := by
+    unfold starLik
+    apply Finset.prod_nonneg
+    intro q hq
+    apply HypercubeRamsey.Lane_q_s10_d4.expect_nonneg
+    intro c
+    apply Finset.prod_nonneg
+    intro b hb
+    exact (labLaw M τ h b c).nonneg (ω b)
+  have subLik_nonneg (τ : Slice n δ → M.I) (h : History n N δ)
+      (a : EvenRole n) (c : ID n δ) (w : Fin (kT n δ) → Fin N)
+      (ω : OddRole n → Fin N) : 0 ≤ subLik M τ h a c w ω := by
+    unfold subLik
+    split_ifs
+    · exact starLik_nonneg τ (History.setTuple h c w) a ω
+    · exact le_rfl
+  have predMass_nonneg (τ : Slice n δ → M.I) (h : History n N δ)
+      (a : EvenRole n) (c : ID n δ) (ω : OddRole n → Fin N) :
+      0 ≤ predMass M τ h a c ω := by
+    unfold predMass
+    exact HypercubeRamsey.Lane_q_s10_d4.expect_nonneg (tuplePrior M τ c)
+      (fun w => subLik M τ h a c w ω) (fun w => subLik_nonneg τ h a c w ω)
+  have posterior_nonneg (τ : Slice n δ → M.I) (h : History n N δ)
+      (a : EvenRole n) (c : ID n δ) (ω : OddRole n → Fin N)
+      (w : Fin (kT n δ) → Fin N) : 0 ≤ posterior M τ h a c ω w := by
+    unfold posterior
+    exact div_nonneg
+      (mul_nonneg ((tuplePrior M τ c).nonneg w) (subLik_nonneg τ h a c w ω))
+      (predMass_nonneg τ h a c ω)
+  have avgMarginal_nonneg (τ : Slice n δ → M.I) (h : History n N δ)
+      (a : EvenRole n) (c : ID n δ) (ω : OddRole n → Fin N) (x : Fin N) :
+      0 ≤ avgMarginal M τ h a c ω x := by
+    unfold avgMarginal
+    apply Finset.sum_nonneg
+    intro w hw
+    apply mul_nonneg (posterior_nonneg τ h a c ω w)
+    exact div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _)
+  have oddRow_nonneg (τ : Slice n δ → M.I) (h : History n N δ)
+      (b : OddRole n) (y : Fin N) : 0 ≤ oddRow M τ h b y := by
+    unfold oddRow
+    split_ifs
+    · exact HypercubeRamsey.Lane_q_s10_d4.expect_nonneg
+        (clusterLaw M τ h (groupOf δ b))
+        (fun c => (labLaw M τ h b c).w y) (fun c => (labLaw M τ h b c).nonneg y)
+    · exact le_rfl
+  have evenRow_nonneg (τ : Slice n δ → M.I) (h : History n N δ)
+      (ω : OddRole n → Fin N) (a : EvenRole n) (x : Fin N) :
+      0 ≤ evenRow M τ h ω a x := by
+    cases hc : centerOf M τ h a with
+    | none => simp [evenRow, hc]
+    | some c =>
+      simp only [evenRow, hc]
+      split_ifs with hgood
+      · exact div_nonneg (avgMarginal_nonneg τ h a c ω x) hgood.1.2.2.2.le
+      · exact le_rfl
+  have oddMean_nonneg (τ : Slice n δ → M.I) (y : Fin N) (b : OddRole n) :
+      0 ≤ oddMean M τ σ y b := by
+    unfold oddMean
+    apply mul_nonneg (by positivity)
+    exact HypercubeRamsey.Lane_q_s10_d4.expect_nonneg (historyLaw M σ τ)
+      (fun h => oddRow M τ h b y) (fun h => oddRow_nonneg τ h b y)
+  have evenMean_nonneg (τ : Slice n δ → M.I) (x : Fin N) (a : EvenRole n) :
+      0 ≤ evenMean M τ σ x a := by
+    unfold evenMean
+    apply mul_nonneg (by positivity)
+    apply HypercubeRamsey.Lane_q_s10_d4.expect_nonneg
+      (historyLaw M σ τ)
+    intro h
+    apply Finset.sum_nonneg
+    intro c hc
+    apply mul_nonneg ((FinProb.pi (clusterLaw M τ h)).nonneg c)
+    exact HypercubeRamsey.Lane_q_s10_d4.expect_nonneg
+      (FinProb.pi (fun b => labLaw M τ h b (c (groupOf δ b))))
+      (fun ω => evenRow M τ h ω a x) (fun ω => evenRow_nonneg τ h ω a x)
+  have oddResponse_nonneg (tag : M.I) (y : Fin N) : 0 ≤ oddResponse tag y := by
+    unfold oddResponse
+    apply mul_nonneg hoddScaleNonneg
+    apply Finset.sum_nonneg
+    intro b hb
+    unfold FinProb.expect
+    apply Finset.sum_nonneg
+    intro τ hτ
+    exact mul_nonneg ((profileLaw tag).nonneg τ) (oddMean_nonneg τ y b)
+  have evenResponse_nonneg (tag : M.I) (x : Fin N) : 0 ≤ evenResponse tag x := by
+    unfold evenResponse
+    apply mul_nonneg hevenScaleNonneg
+    apply Finset.sum_nonneg
+    intro a ha
+    unfold FinProb.expect
+    apply Finset.sum_nonneg
+    intro τ hτ
+    exact mul_nonneg ((profileLaw tag).nonneg τ) (evenMean_nonneg τ x a)
+  have oddResponse_mass (tag : M.I) : ∑ y, oddResponse tag y ≤ (N : ℝ) := by
+    unfold oddResponse
+    have hrole (b : OddRole n) :
+        ∑ y, (profileLaw tag).expect (fun τ => oddMean M τ σ y b) ≤ (N : ℝ) :=
+      HypercubeRamsey.Lane_q_s10_d4.expect_vector_mass_le_of_bound
+        (profileLaw tag) (fun τ y => oddMean M τ σ y b) (N : ℝ)
+        (fun τ => oddMeanMass τ b)
+    have hswap :
+        (∑ y : Fin N, ∑ b ∈ oddFiber,
+          (profileLaw tag).expect (fun τ => oddMean M τ σ y b)) =
+          ∑ b ∈ oddFiber, ∑ y : Fin N,
+            (profileLaw tag).expect (fun τ => oddMean M τ σ y b) := by
+      exact Finset.sum_comm
+    calc
+      ∑ y, oddScale * ∑ b ∈ oddFiber,
+          (profileLaw tag).expect (fun τ => oddMean M τ σ y b) =
+          oddScale * ∑ b ∈ oddFiber,
+            ∑ y, (profileLaw tag).expect (fun τ => oddMean M τ σ y b) := by
+        rw [← Finset.mul_sum, hswap]
+      _ ≤ oddScale * ∑ b ∈ oddFiber, (N : ℝ) := by
+        apply mul_le_mul_of_nonneg_left
+          (Finset.sum_le_sum fun b hb => hrole b) hoddScaleNonneg
+      _ = oddScale * ((oddFiber.card : ℝ) * N) := by simp [Finset.sum_const, nsmul_eq_mul]
+      _ = (oddScale * (oddFiber.card : ℝ)) * N := by ring
+      _ ≤ 1 * N := mul_le_mul_of_nonneg_right hoddScaleCard (by positivity)
+      _ = (N : ℝ) := by ring
+  have evenResponse_mass (tag : M.I) : ∑ x, evenResponse tag x ≤ (N : ℝ) := by
+    unfold evenResponse
+    have hrole (a : EvenRole n) :
+        ∑ x, (profileLaw tag).expect (fun τ => evenMean M τ σ x a) ≤ (N : ℝ) :=
+      HypercubeRamsey.Lane_q_s10_d4.expect_vector_mass_le_of_bound
+        (profileLaw tag) (fun τ x => evenMean M τ σ x a) (N : ℝ)
+        (fun τ => evenMeanMass τ a)
+    have hswap :
+        (∑ x : Fin N, ∑ a ∈ evenFiber,
+          (profileLaw tag).expect (fun τ => evenMean M τ σ x a)) =
+          ∑ a ∈ evenFiber, ∑ x : Fin N,
+            (profileLaw tag).expect (fun τ => evenMean M τ σ x a) := by
+      exact Finset.sum_comm
+    calc
+      ∑ x, evenScale * ∑ a ∈ evenFiber,
+          (profileLaw tag).expect (fun τ => evenMean M τ σ x a) =
+          evenScale * ∑ a ∈ evenFiber,
+            ∑ x, (profileLaw tag).expect (fun τ => evenMean M τ σ x a) := by
+        rw [← Finset.mul_sum, hswap]
+      _ ≤ evenScale * ∑ a ∈ evenFiber, (N : ℝ) := by
+        apply mul_le_mul_of_nonneg_left
+          (Finset.sum_le_sum fun a ha => hrole a) hevenScaleNonneg
+      _ = evenScale * ((evenFiber.card : ℝ) * N) := by simp [Finset.sum_const, nsmul_eq_mul]
+      _ = (evenScale * (evenFiber.card : ℝ)) * N := by ring
+      _ ≤ 1 * N := mul_le_mul_of_nonneg_right hevenScaleCard (by positivity)
+      _ = (N : ℝ) := by ring
+  have profileWeightZero (tag : M.I) (τ : Slice n δ → M.I) (hneq : τ j ≠ tag) :
+      (profileLaw tag).w τ = 0 := by
+    have hfactor : (Function.update qLaw j (pointLaw tag) j).w (τ j) = 0 := by
+      simp [pointLaw, hneq]
+    change (∏ z, (Function.update qLaw j (pointLaw tag) z).w (τ z)) = 0
+    exact Finset.prod_eq_zero (Finset.mem_univ j) hfactor
+  have oddResponse_zero (tag : M.I) (y : Fin N)
+      (hν : (Law.mix (prior M tag) (M.D tag)).w y = 0) : oddResponse tag y = 0 := by
+    unfold oddResponse
+    have hsum : ∑ b ∈ oddFiber, (profileLaw tag).expect
+        (fun τ => oddMean M τ σ y b) = 0 := by
+      apply Finset.sum_eq_zero
+      intro b hb
+      have hbslice : (groupOf δ b).1 = j := by simpa [oddFiber] using hb
+      unfold FinProb.expect
+      apply Finset.sum_eq_zero
+      intro τ hτ
+      change (profileLaw tag).w τ * oddMean M τ σ y b = 0
+      by_cases htag : τ j = tag
+      · have htag' : τ (groupOf δ b).1 = tag := by rw [hbslice]; exact htag
+        change (profileLaw tag).w τ * oddMean M τ σ y b = 0
+        exact mul_eq_zero.mpr (Or.inr (oddMeanZero τ y b tag htag' hν))
+      · have hw : (profileLaw tag).w τ = 0 := profileWeightZero tag τ htag
+        simp [hw]
+    rw [hsum]
+    ring
+  have evenResponse_zero (tag : M.I) (x : Fin N)
+      (hμ : (M.μ tag).w x = 0) : evenResponse tag x = 0 := by
+    unfold evenResponse
+    have hsum : ∑ a ∈ evenFiber, (profileLaw tag).expect
+        (fun τ => evenMean M τ σ x a) = 0 := by
+      apply Finset.sum_eq_zero
+      intro a ha
+      have haslice : (evenSite δ a).1 = j := by simpa [evenFiber] using ha
+      unfold FinProb.expect
+      apply Finset.sum_eq_zero
+      intro τ hτ
+      change (profileLaw tag).w τ * evenMean M τ σ x a = 0
+      by_cases htag : τ j = tag
+      · have htag' : τ (evenSite δ a).1 = tag := by rw [haslice]; exact htag
+        change (profileLaw tag).w τ * evenMean M τ σ x a = 0
+        exact mul_eq_zero.mpr (Or.inr (evenMeanZero τ x a tag htag' hμ))
+      · have hw : (profileLaw tag).w τ = 0 := profileWeightZero tag τ htag
+        simp [hw]
+    rw [hsum]
+    ring
+  have hNposN : 0 < N := by
+    have hpow : 0 < 2 ^ n := Nat.pow_pos (by decide)
+    omega
+  have hNposR : 0 < (N : ℝ) := by exact_mod_cast hNposN
+  have hprice : ∀ p : Sum (Fin N) (Fin N) → ℝ, (∀ k, 0 ≤ p k) →
+      ∃ tag : M.I,
+        ∑ k, p k * coordResponse tag k ≤ ∑ k, p k * (4 / κ) := by
+    intro p hp
+    let total : ℝ := ∑ k, p k
+    let cut : ℝ := 2 * total / (κ * (N : ℝ))
+    let RX : Finset (Fin N) := Finset.univ.filter fun x => cut < p (Sum.inr x)
+    let RY : Finset (Fin N) := Finset.univ.filter fun y => cut < p (Sum.inl y)
+    have htotal : 0 ≤ total := Finset.sum_nonneg fun k hk => hp k
+    have hcut : 0 ≤ cut := div_nonneg (mul_nonneg (by norm_num) htotal)
+      (mul_nonneg hκ.le (by positivity))
+    have hoddSideNonneg : 0 ≤ ∑ y, p (Sum.inl y) := Finset.sum_nonneg fun y hy => hp _
+    have hevenSideNonneg : 0 ≤ ∑ x, p (Sum.inr x) := Finset.sum_nonneg fun x hx => hp _
+    have htotalSplit : total = (∑ y, p (Sum.inl y)) + ∑ x, p (Sum.inr x) := by
+      dsimp [total]
+      rw [Fintype.sum_sum_type]
+    have hoddSide : ∑ y, p (Sum.inl y) ≤ total := by
+      calc
+        _ ≤ (∑ y, p (Sum.inl y)) + ∑ x, p (Sum.inr x) :=
+          le_add_of_nonneg_right hevenSideNonneg
+        _ = total := htotalSplit.symm
+    have hevenSide : ∑ x, p (Sum.inr x) ≤ total := by
+      calc
+        _ ≤ (∑ x, p (Sum.inr x)) + ∑ y, p (Sum.inl y) :=
+          le_add_of_nonneg_right hoddSideNonneg
+        _ = total := by rw [htotalSplit]; ring
+    have highCardBound (v : Fin N → ℝ) (hv : ∀ x, 0 ≤ v x)
+        (hvs : ∑ x, v x ≤ total) :
+        ((Finset.univ.filter fun x : Fin N => cut < v x).card : ℝ) ≤ κ * (N : ℝ) := by
+      let R := Finset.univ.filter fun x : Fin N => cut < v x
+      have hcardCut : (R.card : ℝ) * cut ≤ total := by
+        calc
+          (R.card : ℝ) * cut = ∑ x ∈ R, cut := by simp [Finset.sum_const, nsmul_eq_mul]
+          _ ≤ ∑ x ∈ R, v x := by
+            apply Finset.sum_le_sum
+            intro x hx
+            exact le_of_lt ((Finset.mem_filter.mp hx).2)
+          _ ≤ ∑ x, v x := Finset.sum_le_sum_of_subset_of_nonneg
+            (Finset.filter_subset ..) (by intro x hx hnot; exact hv x)
+          _ ≤ total := hvs
+      by_cases htotalPos : 0 < total
+      · have hcutPos : 0 < cut := by
+          dsimp [cut]
+          exact div_pos (mul_pos (by norm_num) htotalPos) (mul_pos hκ hNposR)
+        have hcardRatio : (R.card : ℝ) ≤ total / cut := (le_div_iff₀ hcutPos).2 hcardCut
+        have hratio : total / cut = κ * (N : ℝ) / 2 := by
+          dsimp [cut]
+          field_simp [ne_of_gt hκ, ne_of_gt hNposR, ne_of_gt htotalPos]
+        rw [hratio] at hcardRatio
+        have hκNnonneg : 0 ≤ κ * (N : ℝ) := mul_nonneg hκ.le hNposR.le
+        nlinarith
+      · have htotalZero : total = 0 := le_antisymm (not_lt.mp htotalPos) htotal
+        have hvzero : ∀ x, v x = 0 := by
+          intro x
+          have hle : v x ≤ total := by
+            calc
+              v x ≤ ∑ z, v z := Finset.single_le_sum (fun z hz => hv z) (Finset.mem_univ x)
+              _ ≤ total := hvs
+          linarith [hv x, htotalZero]
+        have hRempty : R = ∅ := by
+          apply Finset.eq_empty_iff_forall_notMem.mpr
+          intro x hx
+          have hx' := (Finset.mem_filter.mp hx).2
+          simp [cut, htotalZero, hvzero x] at hx'
+        simpa [R, hRempty] using (mul_nonneg hκ.le hNposR.le)
+    have hRX : (RX.card : ℝ) ≤ κ * N := by
+      simpa [RX] using highCardBound (fun x => p (Sum.inr x))
+        (fun x => hp (Sum.inr x)) hevenSide
+    have hRY : (RY.card : ℝ) ≤ κ * N := by
+      simpa [RY] using highCardBound (fun y => p (Sum.inl y))
+        (fun y => hp (Sum.inl y)) hoddSide
+    obtain ⟨tag, hμavoid, hνavoid⟩ := M.avoid RX RY hRX hRY
+    have hEvenCost : ∑ x, p (Sum.inr x) * evenResponse tag x ≤ cut * (N : ℝ) := by
+      calc
+        ∑ x, p (Sum.inr x) * evenResponse tag x ≤
+            ∑ x, cut * evenResponse tag x := by
+          apply Finset.sum_le_sum
+          intro x hx
+          by_cases hxR : x ∈ RX
+          · rw [evenResponse_zero tag x (hμavoid x hxR)]
+            simp
+          · have hple : p (Sum.inr x) ≤ cut := by
+              apply le_of_not_gt
+              intro hgt
+              exact hxR (Finset.mem_filter.mpr ⟨Finset.mem_univ _, hgt⟩)
+            exact mul_le_mul_of_nonneg_right hple (evenResponse_nonneg tag x)
+        _ = cut * ∑ x, evenResponse tag x := by rw [← Finset.mul_sum]
+        _ ≤ cut * (N : ℝ) := mul_le_mul_of_nonneg_left (evenResponse_mass tag) hcut
+    have hOddCost : ∑ y, p (Sum.inl y) * oddResponse tag y ≤ cut * (N : ℝ) := by
+      calc
+        ∑ y, p (Sum.inl y) * oddResponse tag y ≤
+            ∑ y, cut * oddResponse tag y := by
+          apply Finset.sum_le_sum
+          intro y hy
+          by_cases hyR : y ∈ RY
+          · rw [oddResponse_zero tag y (hνavoid y hyR)]
+            simp
+          · have hple : p (Sum.inl y) ≤ cut := by
+              apply le_of_not_gt
+              intro hgt
+              exact hyR (Finset.mem_filter.mpr ⟨Finset.mem_univ _, hgt⟩)
+            exact mul_le_mul_of_nonneg_right hple (oddResponse_nonneg tag y)
+        _ = cut * ∑ y, oddResponse tag y := by rw [← Finset.mul_sum]
+        _ ≤ cut * (N : ℝ) := mul_le_mul_of_nonneg_left (oddResponse_mass tag) hcut
+    have hcutBudget : 2 * cut * (N : ℝ) = (4 / κ) * total := by
+      dsimp [cut]
+      field_simp [ne_of_gt hκ, ne_of_gt hNposR]
+      ring
+    have hcost : ∑ k, p k * coordResponse tag k ≤ 2 * cut * (N : ℝ) := by
+      have hsplit : ∑ k, p k * coordResponse tag k =
+          (∑ y, p (Sum.inl y) * oddResponse tag y) +
+            ∑ x, p (Sum.inr x) * evenResponse tag x := by
+        simp [coordResponse, Fintype.sum_sum_type]
+      rw [hsplit]
+      linarith [hOddCost, hEvenCost]
+    have htarget : ∑ k, p k * (4 / κ) = (4 / κ) * total := by
+      dsimp [total]
+      rw [← Finset.sum_mul]
+      ring
+    refine ⟨tag, ?_⟩
+    calc
+      ∑ k, p k * coordResponse tag k ≤ 2 * cut * (N : ℝ) := hcost
+      _ = (4 / κ) * total := hcutBudget
+      _ = ∑ k, p k * (4 / κ) := htarget.symm
+  have profileWeightPure (tag : M.I) (τ : Slice n δ → M.I) :
+      (profileLaw tag).w τ =
+        ∏ z, Function.update q j (fun b => if b = tag then 1 else 0) z (τ z) := by
+    change (∏ z, (Function.update qLaw j (pointLaw tag) z).w (τ z)) = _
+    apply Finset.prod_congr rfl
+    intro z hz
+    by_cases hzij : z = j
+    · subst z
+      simp [qLaw, pointLaw]
+    · simp [Function.update_of_ne hzij, qLaw, pointLaw]
+  have profileProductMixture (qj : M.I → ℝ) (τ : Slice n δ → M.I) :
+      (∏ z, Function.update q j qj z (τ z)) =
+        ∑ tag, qj tag * (profileLaw tag).w τ := by
+    calc
+      (∏ z, Function.update q j qj z (τ z)) =
+          ∑ tag, qj tag *
+            ∏ z, Function.update q j (fun b => if b = tag then 1 else 0) z (τ z) :=
+        HypercubeRamsey.Lane_q_s10_d4.product_update_weight_mixture q j qj τ
+      _ = ∑ tag, qj tag * (profileLaw tag).w τ := by
+        apply Finset.sum_congr rfl
+        intro tag htag
+        rw [← profileWeightPure]
+  have pureOddResponse (tag : M.I) (y : Fin N) :
+      ∑ τ : Slice n δ → M.I, (profileLaw tag).w τ *
+          (oddScale * ∑ b ∈ oddFiber, oddMean M τ σ y b) = oddResponse tag y := by
+    have hswap :
+        (∑ τ : Slice n δ → M.I, (profileLaw tag).w τ *
+          ∑ b ∈ oddFiber, oddMean M τ σ y b) =
+        ∑ b ∈ oddFiber, ∑ τ : Slice n δ → M.I,
+          (profileLaw tag).w τ * oddMean M τ σ y b := by
+      calc
+        (∑ τ, (profileLaw tag).w τ * ∑ b ∈ oddFiber, oddMean M τ σ y b) =
+            ∑ τ, ∑ b ∈ oddFiber, (profileLaw tag).w τ * oddMean M τ σ y b := by
+          apply Finset.sum_congr rfl
+          intro τ hτ
+          rw [Finset.mul_sum]
+        _ = ∑ b ∈ oddFiber, ∑ τ, (profileLaw tag).w τ * oddMean M τ σ y b :=
+          Finset.sum_comm
+    calc
+      ∑ τ, (profileLaw tag).w τ * (oddScale * ∑ b ∈ oddFiber,
+          oddMean M τ σ y b) =
+          oddScale * ∑ τ, (profileLaw tag).w τ *
+            ∑ b ∈ oddFiber, oddMean M τ σ y b := by
+        calc
+          _ = ∑ τ, oddScale * ((profileLaw tag).w τ *
+              ∑ b ∈ oddFiber, oddMean M τ σ y b) := by
+            apply Finset.sum_congr rfl
+            intro τ hτ
+            ring
+          _ = _ := by rw [Finset.mul_sum]
+      _ = oddScale * ∑ b ∈ oddFiber, ∑ τ : Slice n δ → M.I,
+            (profileLaw tag).w τ * oddMean M τ σ y b := by rw [hswap]
+      _ = oddResponse tag y := by
+        unfold oddResponse
+        simp only [FinProb.expect]
+  have pureEvenResponse (tag : M.I) (x : Fin N) :
+      ∑ τ : Slice n δ → M.I, (profileLaw tag).w τ *
+          (evenScale * ∑ a ∈ evenFiber, evenMean M τ σ x a) = evenResponse tag x := by
+    have hswap :
+        (∑ τ : Slice n δ → M.I, (profileLaw tag).w τ *
+          ∑ a ∈ evenFiber, evenMean M τ σ x a) =
+        ∑ a ∈ evenFiber, ∑ τ : Slice n δ → M.I,
+          (profileLaw tag).w τ * evenMean M τ σ x a := by
+      calc
+        (∑ τ, (profileLaw tag).w τ * ∑ a ∈ evenFiber, evenMean M τ σ x a) =
+            ∑ τ, ∑ a ∈ evenFiber, (profileLaw tag).w τ * evenMean M τ σ x a := by
+          apply Finset.sum_congr rfl
+          intro τ hτ
+          rw [Finset.mul_sum]
+        _ = ∑ a ∈ evenFiber, ∑ τ, (profileLaw tag).w τ * evenMean M τ σ x a :=
+          Finset.sum_comm
+    calc
+      ∑ τ, (profileLaw tag).w τ * (evenScale * ∑ a ∈ evenFiber,
+          evenMean M τ σ x a) =
+          evenScale * ∑ τ, (profileLaw tag).w τ *
+            ∑ a ∈ evenFiber, evenMean M τ σ x a := by
+        calc
+          _ = ∑ τ, evenScale * ((profileLaw tag).w τ *
+              ∑ a ∈ evenFiber, evenMean M τ σ x a) := by
+            apply Finset.sum_congr rfl
+            intro τ hτ
+            ring
+          _ = _ := by rw [Finset.mul_sum]
+      _ = evenScale * ∑ a ∈ evenFiber, ∑ τ : Slice n δ → M.I,
+            (profileLaw tag).w τ * evenMean M τ σ x a := by rw [hswap]
+      _ = evenResponse tag x := by
+        unfold evenResponse
+        simp only [FinProb.expect]
+  have mixedOddResponse (qj : M.I → ℝ) (y : Fin N) :
+      ∑ τ : Slice n δ → M.I,
+          (∏ z, Function.update q j qj z (τ z)) *
+            (oddScale * ∑ b ∈ oddFiber, oddMean M τ σ y b) =
+        ∑ tag, qj tag * oddResponse tag y := by
+    calc
+      ∑ τ : Slice n δ → M.I,
+          (∏ z, Function.update q j qj z (τ z)) *
+            (oddScale * ∑ b ∈ oddFiber, oddMean M τ σ y b) =
+          ∑ τ, (∑ tag, qj tag * (profileLaw tag).w τ) *
+            (oddScale * ∑ b ∈ oddFiber, oddMean M τ σ y b) := by
+        apply Finset.sum_congr rfl
+        intro τ hτ
+        rw [profileProductMixture]
+      _ = ∑ τ, ∑ tag, qj tag * ((profileLaw tag).w τ *
+            (oddScale * ∑ b ∈ oddFiber, oddMean M τ σ y b)) := by
+        apply Finset.sum_congr rfl
+        intro τ hτ
+        rw [Finset.sum_mul]
+        apply Finset.sum_congr rfl
+        intro tag htag
+        ring
+      _ = ∑ tag, ∑ τ, qj tag * ((profileLaw tag).w τ *
+            (oddScale * ∑ b ∈ oddFiber, oddMean M τ σ y b)) := by
+        rw [Finset.sum_comm]
+      _ = ∑ tag, qj tag * oddResponse tag y := by
+        apply Finset.sum_congr rfl
+        intro tag htag
+        calc
+          ∑ τ, qj tag * ((profileLaw tag).w τ *
+              (oddScale * ∑ b ∈ oddFiber, oddMean M τ σ y b)) =
+              qj tag * ∑ τ, (profileLaw tag).w τ *
+                (oddScale * ∑ b ∈ oddFiber, oddMean M τ σ y b) := by
+            rw [Finset.mul_sum]
+          _ = qj tag * oddResponse tag y := by rw [pureOddResponse]
+  have mixedEvenResponse (qj : M.I → ℝ) (x : Fin N) :
+      ∑ τ : Slice n δ → M.I,
+          (∏ z, Function.update q j qj z (τ z)) *
+            (evenScale * ∑ a ∈ evenFiber, evenMean M τ σ x a) =
+        ∑ tag, qj tag * evenResponse tag x := by
+    calc
+      ∑ τ : Slice n δ → M.I,
+          (∏ z, Function.update q j qj z (τ z)) *
+            (evenScale * ∑ a ∈ evenFiber, evenMean M τ σ x a) =
+          ∑ τ, (∑ tag, qj tag * (profileLaw tag).w τ) *
+            (evenScale * ∑ a ∈ evenFiber, evenMean M τ σ x a) := by
+        apply Finset.sum_congr rfl
+        intro τ hτ
+        rw [profileProductMixture]
+      _ = ∑ τ, ∑ tag, qj tag * ((profileLaw tag).w τ *
+            (evenScale * ∑ a ∈ evenFiber, evenMean M τ σ x a)) := by
+        apply Finset.sum_congr rfl
+        intro τ hτ
+        rw [Finset.sum_mul]
+        apply Finset.sum_congr rfl
+        intro tag htag
+        ring
+      _ = ∑ tag, ∑ τ, qj tag * ((profileLaw tag).w τ *
+            (evenScale * ∑ a ∈ evenFiber, evenMean M τ σ x a)) := by
+        rw [Finset.sum_comm]
+      _ = ∑ tag, qj tag * evenResponse tag x := by
+        apply Finset.sum_congr rfl
+        intro tag htag
+        calc
+          ∑ τ, qj tag * ((profileLaw tag).w τ *
+              (evenScale * ∑ a ∈ evenFiber, evenMean M τ σ x a)) =
+              qj tag * ∑ τ, (profileLaw tag).w τ *
+                (evenScale * ∑ a ∈ evenFiber, evenMean M τ σ x a) := by
+            rw [Finset.mul_sum]
+          _ = qj tag * evenResponse tag x := by rw [pureEvenResponse]
+  obtain ⟨qj, hqj0, hqjSum, hqjBound⟩ :=
+    HypercubeRamsey.Lane_q_s10_d4.finite_mixture_le_of_price_bound
+      coordResponse (fun _ => 4 / κ) hprice
+  refine ⟨qj, hqj0, hqjSum, ?_, ?_⟩
+  · intro y
+    have hmix := mixedOddResponse qj y
+    calc
+      ∑ τ : Slice n δ → M.I, (∏ z, Function.update q j qj z (τ z)) *
+          ((Fintype.card (Slice n δ) : ℝ) / Fintype.card (OddRole n) *
+            ∑ b ∈ Finset.univ.filter (fun b => (groupOf δ b).1 = j), oddMean M τ σ y b) =
+          ∑ tag, qj tag * oddResponse tag y := by
+            simpa [oddScale, oddFiber] using hmix
+      _ = ∑ tag, qj tag * coordResponse tag (Sum.inl y) := by
+        simp [coordResponse]
+      _ ≤ 4 / κ := by simpa [coordResponse] using hqjBound (Sum.inl y)
+  · intro x
+    have hmix := mixedEvenResponse qj x
+    calc
+      ∑ τ : Slice n δ → M.I, (∏ z, Function.update q j qj z (τ z)) *
+          ((Fintype.card (Slice n δ) : ℝ) / Fintype.card (EvenRole n) *
+            ∑ a ∈ Finset.univ.filter (fun a => (evenSite δ a).1 = j), evenMean M τ σ x a) =
+          ∑ tag, qj tag * evenResponse tag x := by
+            simpa [evenScale, evenFiber] using hmix
+      _ = ∑ tag, qj tag * coordResponse tag (Sum.inr x) := by
+        simp [coordResponse]
+      _ ≤ 4 / κ := by simpa [coordResponse] using hqjBound (Sum.inr x)
 
 /-- **d10** (budget arithmetic, 10:13–28, 10:83, 10:109, 10:268–292; ~300 lines;
 lemma-level real analysis with `p10_1b_scale_separation`). With `typThr = 8(4/κ+1)`

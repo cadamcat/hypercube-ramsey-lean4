@@ -3,6 +3,7 @@ import HypercubeRamsey.S10.Split_opus_s10_tagged_sol_s10_d56
 import HypercubeRamsey.S10.Split_opus_s10_tagged_sol_s10_d56_independence
 import HypercubeRamsey.S10.Split_opus_s10_tagged_sol_s10_d56_weights
 import HypercubeRamsey.S10.Split_opus_s10_tagged_sol_s10_d56_enumeration
+import HypercubeRamsey.S10.Split_opus_s10_tagged_sol_s10_d56_lists
 
 /-!
 # Section 10: the global experiment and the split of the construction (TeX 10:23–262)
@@ -1245,6 +1246,65 @@ theorem d5_odd_mean_cap (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ : 0 < �
       (G : Colour) (M : MenuData n N E X Y G ζ δ κ) (σ : MaskStrategy M),
       2 ^ n ≤ N → GoodStrategy M σ → ∀ (t : Slice n δ → M.I) y b,
       oddMean M t σ y b ≤ Real.exp ((mS n δ : ℝ) / 10) := by
+  classical
+  have hδone : δ < (1 : ℝ) / 2000 := lt_of_lt_of_le hδsmall
+    (div_le_div_of_nonneg_right (min_le_right _ _) (by norm_num))
+  obtain ⟨c, hc, nSel, hSel⟩ :=
+    Lane_sol_s10_d56.s10_external_weight_sum_eventually δ hδ hδone
+  have hfixedRow {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
+      {G : Colour} (M : MenuData n N E X Y G ζ δ κ) (i : M.I) (S : Finset (Fin N))
+      {r k : ℕ} (μs : Fin r → Law N) (own : Fin r → Prop)
+      (W : Fin r → Fin k → Fin N) (y : Fin N) :
+      hypListRow M i S μs own W y =
+        Lane_sol_s10_d56.fixedRow E G (maskedPrior M i S) (maskedCluster M i S)
+          μs (aG n δ) own W y := by
+    let ρ := maskedPrior M i S
+    let D := maskedCluster M i S
+    let F := fixedListHitSet E G W
+    let kept : Fin (M.K i) → Prop := fun j =>
+      Real.exp (-(3 / 2 : ℝ) * k * r) ≤ lawMassOn (D j) F ∧
+      ∀ b, (if own b then Real.exp ((-Real.log 2 + (8 / 100 : ℝ) * aG n δ) * k)
+        else Real.exp (-(6 / 5 : ℝ) * k)) * lawMassOn (D j) (fixedListHitSetWithout E G W b) ≤
+          lawMassOn (D j) F
+    let wt : Fin (M.K i) → ℝ := fun j => if kept j then ρ.w j * (lawMassOn (D j) F) ^ 2 else 0
+    have hwt (j : Fin (M.K i)) : wt j =
+        Lane_sol_s10_d56.listWeight E G ρ D (aG n δ) own W j := by
+      dsimp only [wt, kept, F]
+      unfold Lane_sol_s10_d56.listWeight Lane_sol_s10_d56.listKept
+      split_ifs <;> rfl
+    have htotal : (∑ j, wt j) = ∑ j, Lane_sol_s10_d56.listWeight E G ρ D (aG n δ) own W j :=
+      Finset.sum_congr rfl (fun j _ => hwt j)
+    change (if fixedListFailure E G ρ D μs (aG n δ) W ∨ ∑ j, wt j = 0 then 0
+      else ∑ j, wt j / (∑ j', wt j') * (restrictOrSelf (D j) F).w y) = _
+    unfold Lane_sol_s10_d56.fixedRow
+    rw [← htotal]
+    by_cases hf : fixedListFailure E G ρ D μs (aG n δ) W ∨ ∑ j, wt j = 0
+    · dsimp only [ρ, D] at hf ⊢
+      simp only [ite_eq_left hf]
+    · dsimp only [ρ, D] at hf ⊢
+      simp only [ite_eq_right hf]
+      apply Finset.sum_congr rfl
+      intro j hj
+      rw [hwt]
+      rfl
+  have hfixedNonneg {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
+      {G : Colour} (M : MenuData n N E X Y G ζ δ κ) (i : M.I) (S : Finset (Fin N))
+      {r k : ℕ} (μs : Fin r → Law N) (own : Fin r → Prop)
+      (W : Fin r → Fin k → Fin N) (y : Fin N) : 0 ≤ hypListRow M i S μs own W y := by
+    rw [hfixedRow]
+    exact Lane_sol_s10_d56.fixedRow_nonneg E G _ _ μs (aG n δ) own W y
+  have hbalancedFixed {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
+      {G : Colour} (M : MenuData n N E X Y G ζ δ κ) (σ : MaskStrategy M)
+      (hgood : GoodStrategy M σ) (t : Slice n δ → M.I) (q : Site n δ) (s : ℕ)
+      (hs : s ≤ TT n δ) (y : Fin N) :
+      let μs : Fin (s + mS n δ) → Law N :=
+        Fin.addCases (fun _ => M.μ (t q.1)) (fun e => M.μ (t (flipSlice q.1 e)))
+      let own : Fin (s + mS n δ) → Prop := fun b => b.val < s
+      ∑ S, (σ t q).w S * (p10_1kTupleArrayLaw (k := kT n δ) μs).expect
+        (fun W => Lane_sol_s10_d56.fixedRow E G (maskedPrior M (t q.1) S)
+          (maskedCluster M (t q.1) S) μs (aG n δ) own W y) ≤
+      Real.exp ((mS n δ : ℝ) / 100) * ∑ j, M.lam (t q.1) j * (M.D (t q.1) j).w y := by
+    simpa only [hypMean, hfixedRow] using hgood.balanced t q s hs y
   sorry
 
 /-- **d6** = P10.1h, the comparison (10.2) (10:191–222; ~500 lines; new

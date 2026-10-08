@@ -218,17 +218,22 @@ noncomputable def historyLaw (σ : MaskStrategy M) (t : Slice n δ → M.I) :
 
 variable (t : Slice n δ → M.I)
 
-/-- Present IDs in the incident site balls of a group, at all levels (10:102). -/
+/-- Present IDs in the radius-`r` balls of a group's incident even sites, at all
+levels (10:102). Only gated sites are read, so on validity the number of
+candidates is controlled by the position counts in `groupValid`. -/
 noncomputable def candidates (h : History n N δ) (q : Site n δ) : Finset (ID n δ) :=
-  p10_1kGroupPositionCandidates δ q h.pos
+  (incidentSites δ q).biUnion fun s =>
+    (Finset.univ : Finset (Fin ((hp n δ).H + 1))).biUnion fun j =>
+      (p10_1kHeightEligibleIds (hp n δ) (fun loc => h.pos (s.1, loc)) s.2 j).image
+        (fun loc => (s.1, loc))
 
 /-- Hypothetical lists of the prescribed form: at most `T` own-slice IDs and
 exactly one ID from each adjacent slice (10:57). -/
 noncomputable def lists (h : History n N δ) (q : Site n δ) : Finset (Finset (ID n δ)) :=
   (candidates h q).powerset.filter fun L =>
     (L.filter fun c => c.1 = q.1).card ≤ TT n δ ∧
-    (∀ c ∈ L, c.1 = q.1 ∨ hammingDist c.1 q.1 = 1) ∧
-    ∀ z' : Slice n δ, hammingDist z' q.1 = 1 → (L.filter fun c => c.1 = z').card = 1
+    (∀ c ∈ L, c.1 = q.1 ∨ _root_.hammingDist c.1 q.1 = 1) ∧
+    ∀ z' : Slice n δ, _root_.hammingDist z' q.1 = 1 → (L.filter fun c => c.1 = z').card = 1
 
 /-- The fixed-list test (10.1) for list `L` at group `q`, under the masked
 cluster mixture of `q`'s tag and mask (10:56–68). -/
@@ -295,16 +300,21 @@ theorem tiltWeight_nonneg (h : History n N δ) (q : Site n δ) (j : Fin (M.K (t 
   · exact le_rfl
 
 /-- The local validity event `𝒱_g` (10:117): position counts within relative
-error `.002`, eligibility sizes at least `.99λ`, selections at all incident sites,
-a passing realized list of the prescribed form (own fan at most `T`), and positive
-retained squared-tilt mass (`h_F > 0`, 10:142). -/
+error `.002`, eligibility sizes at least `.99λ` at the incident sites and legal
+eligibility (`HDParams.Legal`) on every site consulted by their height rules
+(`domBall … Rlong`), selections at all incident sites, a passing realized list of
+the prescribed form (own fan at most `T`), and positive retained squared-tilt mass
+(`h_F > 0`, 10:142). -/
 def groupValid (h : History n N δ) (q : Site n δ) : Prop :=
   (∀ s ∈ incidentSites δ q, ∀ j,
     (998 / 1000 : ℝ) * (hp n δ).lam ≤
         (p10_1kHeightPositionCount (hp n δ) (fun loc => h.pos (s.1, loc)) s.2 j : ℝ) ∧
       (p10_1kHeightPositionCount (hp n δ) (fun loc => h.pos (s.1, loc)) s.2 j : ℝ) ≤
         (1002 / 1000 : ℝ) * (hp n δ).lam) ∧
-  (∀ s ∈ incidentSites δ q, ∀ j, (99 / 100 : ℝ) * (hp n δ).lam ≤ ((elig M t h s.1 s.2 j).card : ℝ)) ∧
+  (∀ s ∈ incidentSites δ q,
+    (∀ j, (99 / 100 : ℝ) * (hp n δ).lam ≤ ((elig M t h s.1 s.2 j).card : ℝ)) ∧
+    (hp n δ).Legal (fun loc => h.pos (s.1, loc)) (elig M t h s.1)
+      ((hp n δ).domBall (sliceSites δ s.1) s.2 (hp n δ).Rlong)) ∧
   (∀ s ∈ incidentSites δ q, (selected M t h s).isSome) ∧
   realizedList M t h q ∈ lists h q ∧
   ¬ listFails M t h q (realizedList M t h q) ∧
@@ -472,19 +482,19 @@ end Experiment
 distance at most `2 R_loc + 16` (10:271). -/
 noncomputable def oddNear {n : ℕ} (δ : ℝ) (b : OddRole n) : Finset (OddRole n) :=
   Finset.univ.filter fun b' =>
-    hammingDist (groupOf δ b).1 (groupOf δ b').1 ≤ 8 ∧
-      hammingDist (groupOf δ b).2 (groupOf δ b').2 ≤ 2 * Rloc n δ + 16
+    _root_.hammingDist (groupOf δ b).1 (groupOf δ b').1 ≤ 8 ∧
+      _root_.hammingDist (groupOf δ b).2 (groupOf δ b').2 ≤ 2 * Rloc n δ + 16
 
 /-- Residual-near even roles (10:288). -/
 noncomputable def evenNear {n : ℕ} (δ : ℝ) (a : EvenRole n) : Finset (EvenRole n) :=
   Finset.univ.filter fun a' =>
-    hammingDist (evenSite δ a).1 (evenSite δ a').1 ≤ 8 ∧
-      hammingDist (evenSite δ a).2 (evenSite δ a').2 ≤ 2 * Rloc n δ + 16
+    _root_.hammingDist (evenSite δ a).1 (evenSite δ a').1 ≤ 8 ∧
+      _root_.hammingDist (evenSite δ a).2 (evenSite δ a').2 ≤ 2 * Rloc n δ + 16
 
 /-- Tag-dependence neighbourhood of a slice: special distance at most 4
 (10:119–121, 10:263). -/
 noncomputable def tagNbhd {n : ℕ} (δ : ℝ) (z : Slice n δ) : Finset (Slice n δ) :=
-  Finset.univ.filter fun z' => hammingDist z z' ≤ 4
+  Finset.univ.filter fun z' => _root_.hammingDist z z' ≤ 4
 
 
 /-! ## Caps, fractions and failure levels as finite suprema
@@ -596,7 +606,7 @@ every hypothetical mean at most `e^{m/100} ν` pointwise (the paper gives
 `O(T+1) ν`, which is smaller for large `n`; d5 needs only this). -/
 structure GoodStrategy (σ : MaskStrategy M) : Prop where
   local_tags : ∀ q : Site n δ, FinProb.DependsOn (fun t : Slice n δ → M.I => σ t q)
-    (Finset.univ.filter fun z => hammingDist z q.1 ≤ 1)
+    (Finset.univ.filter fun z => _root_.hammingDist z q.1 ≤ 1)
   permitted : ∀ t q S, (σ t q).w S ≠ 0 → Permitted M (t q.1) S ∨ S = Finset.univ
   balanced : ∀ t q (s : ℕ), s ≤ TT n δ → ∀ y,
     ∑ S, (σ t q).w S * hypMean M t q S s y ≤
@@ -655,7 +665,527 @@ theorem d1f_facts (M : MenuData n N E X Y G ζ δ κ) (σ : MaskStrategy M)
     (∀ a h x, FinProb.DependsOn (fun ω => evenRow M t h ω a x) (starOf a)) ∧
     (∀ y b, 0 ≤ oddMean M t σ y b) ∧
     (∀ x a, 0 ≤ evenMean M t σ x a) := by
-  sorry
+  classical
+  have expect_nonneg {α : Type} [Fintype α] (P : FinProb α) (f : α → ℝ)
+      (hf : ∀ x, 0 ≤ f x) : 0 ≤ P.expect f := by
+    unfold FinProb.expect
+    apply Finset.sum_nonneg
+    intro x hx
+    exact mul_nonneg (P.nonneg x) (hf x)
+  have starLik_nonneg (h : History n N δ) (a : EvenRole n) (ω : OddRole n → Fin N) :
+      0 ≤ starLik M t h a ω := by
+    unfold starLik
+    apply Finset.prod_nonneg
+    intro q hq
+    apply expect_nonneg
+    intro c
+    apply Finset.prod_nonneg
+    intro b hb
+    exact (labLaw M t h b c).nonneg (ω b)
+  have subLik_nonneg (h : History n N δ) (a : EvenRole n) (c : ID n δ)
+      (w : Fin (kT n δ) → Fin N) (ω : OddRole n → Fin N) :
+      0 ≤ subLik M t h a c w ω := by
+    unfold subLik
+    split_ifs
+    · exact starLik_nonneg (History.setTuple h c w) a ω
+    · exact le_rfl
+  have predMass_nonneg (h : History n N δ) (a : EvenRole n) (c : ID n δ)
+      (ω : OddRole n → Fin N) : 0 ≤ predMass M t h a c ω := by
+    unfold predMass
+    apply expect_nonneg
+    intro w
+    exact subLik_nonneg h a c w ω
+  have avgMarginal_nonneg (h : History n N δ) (a : EvenRole n) (c : ID n δ)
+      (ω : OddRole n → Fin N) (x : Fin N) (hm : 0 < predMass M t h a c ω) :
+      0 ≤ avgMarginal M t h a c ω x := by
+    unfold avgMarginal
+    apply Finset.sum_nonneg
+    intro w hw
+    apply mul_nonneg
+    · unfold posterior
+      apply div_nonneg
+      · exact mul_nonneg ((tuplePrior M t c).nonneg w)
+          (subLik_nonneg h a c w ω)
+      · exact hm.le
+    · exact div_nonneg (Nat.cast_nonneg _)
+        (Nat.cast_nonneg (kT n δ))
+
+  have oddRow_nonneg : ∀ h b y, 0 ≤ oddRow M t h b y := by
+    intro h b y
+    unfold oddRow
+    split_ifs
+    · apply expect_nonneg
+      intro c
+      exact (labLaw M t h b c).nonneg y
+    · exact le_rfl
+
+  have groupOf_isGroup (b : OddRole n) : IsGroup δ (groupOf δ b) := by
+    change (p10_1kOddGroupRoles (mS_le n δ)
+      (p10_1kProjectedVertex (mS_le n δ) b.1)).Nonempty
+    exact ⟨b, Finset.mem_filter.mpr ⟨Finset.mem_univ _, rfl⟩⟩
+
+  have hStarLikEq (h : History n N δ) (a : EvenRole n)
+      (ω ω' : OddRole n → Fin N)
+      (hag : ∀ b ∈ starOf a, ω b = ω' b) :
+      starLik M t h a ω = starLik M t h a ω' := by
+    unfold starLik
+    apply Finset.prod_congr rfl
+    intro q hq
+    unfold FinProb.expect
+    apply Finset.sum_congr rfl
+    intro c hc
+    congr 1
+    apply Finset.prod_congr rfl
+    intro b hb
+    exact congrArg (fun y => (labLaw M t h b c).w y)
+      (hag b (Finset.mem_filter.mp hb).1)
+
+  have hSubLikEq (h : History n N δ) (a : EvenRole n) (c : ID n δ)
+      (w : Fin (kT n δ) → Fin N) (ω ω' : OddRole n → Fin N)
+      (hag : ∀ b ∈ starOf a, ω b = ω' b) :
+      subLik M t h a c w ω = subLik M t h a c w ω' := by
+    unfold subLik
+    rw [hStarLikEq (History.setTuple h c w) a ω ω' hag]
+
+  have hDelRefEq (h : History n N δ) (a : EvenRole n) (q : Site n δ)
+      (L : Finset (ID n δ)) (c : ID n δ) (ω ω' : OddRole n → Fin N)
+      (hag : ∀ b ∈ starOf a, ω b = ω' b) :
+      deletionRef M t h a q L c ω = deletionRef M t h a q L c ω' := by
+    unfold deletionRef
+    apply Finset.sum_congr rfl
+    intro j hj
+    congr 1
+    apply Finset.prod_congr rfl
+    intro b hb
+    exact congrArg (fun y => (restrictOrSelf (maskedCluster M (t q.1) (h.mask q) j)
+      (Finset.univ.filter fun y => ∀ c' ∈ L, c' ≠ c → ∀ i, Hits E G (h.tup c' i) y)).w y)
+      (hag b (Finset.mem_filter.mp hb).1)
+
+  have hGroupRefEq (h : History n N δ) (a : EvenRole n) (q : Site n δ)
+      (c : ID n δ) (ω ω' : OddRole n → Fin N)
+      (hag : ∀ b ∈ starOf a, ω b = ω' b) :
+      groupRef M t h a q c ω = groupRef M t h a q c ω' := by
+    unfold groupRef
+    congr 1
+    apply Finset.sum_congr rfl
+    intro L hL
+    exact hDelRefEq h a q L c ω ω' hag
+
+  have hRefQEq (h : History n N δ) (a : EvenRole n) (c : ID n δ)
+      (ω ω' : OddRole n → Fin N)
+      (hag : ∀ b ∈ starOf a, ω b = ω' b) :
+      refQ M t h a c ω = refQ M t h a c ω' := by
+    unfold refQ
+    apply Finset.prod_congr rfl
+    intro q hq
+    exact hGroupRefEq h a q c ω ω' hag
+
+  have hPredMassEq (h : History n N δ) (a : EvenRole n) (c : ID n δ)
+      (ω ω' : OddRole n → Fin N)
+      (hag : ∀ b ∈ starOf a, ω b = ω' b) :
+      predMass M t h a c ω = predMass M t h a c ω' := by
+    unfold predMass FinProb.expect
+    apply Finset.sum_congr rfl
+    intro w hw
+    change (tuplePrior M t c).w w * subLik M t h a c w ω =
+      (tuplePrior M t c).w w * subLik M t h a c w ω'
+    congr 1
+    exact hSubLikEq h a c w ω ω' hag
+
+  have hPosteriorEq (h : History n N δ) (a : EvenRole n) (c : ID n δ)
+      (ω ω' : OddRole n → Fin N) (w : Fin (kT n δ) → Fin N)
+      (hag : ∀ b ∈ starOf a, ω b = ω' b) :
+      posterior M t h a c ω w = posterior M t h a c ω' w := by
+    simp [posterior, hSubLikEq h a c w ω ω' hag, hPredMassEq h a c ω ω' hag]
+
+  have hAvgMarginalEq (h : History n N δ) (a : EvenRole n) (c : ID n δ)
+      (ω ω' : OddRole n → Fin N) (x : Fin N)
+      (hag : ∀ b ∈ starOf a, ω b = ω' b) :
+      avgMarginal M t h a c ω x = avgMarginal M t h a c ω' x := by
+    unfold avgMarginal
+    apply Finset.sum_congr rfl
+    intro w hw
+    rw [hPosteriorEq h a c ω ω' w hag]
+
+  have hHeavyEq (h : History n N δ) (a : EvenRole n) (c : ID n δ)
+      (ω ω' : OddRole n → Fin N)
+      (hag : ∀ b ∈ starOf a, ω b = ω' b) :
+      heavy M t h a c ω = heavy M t h a c ω' := by
+    ext x
+    simp [heavy, hAvgMarginalEq h a c ω ω' x hag]
+
+  have hLightMassEq (h : History n N δ) (a : EvenRole n) (c : ID n δ)
+      (ω ω' : OddRole n → Fin N)
+      (hag : ∀ b ∈ starOf a, ω b = ω' b) :
+      lightMass M t h a c ω = lightMass M t h a c ω' := by
+    simp [lightMass, hHeavyEq h a c ω ω' hag,
+      hAvgMarginalEq h a c ω ω' _ hag]
+
+  have hPredOKEq (h : History n N δ) (a : EvenRole n) (c : ID n δ)
+      (ω ω' : OddRole n → Fin N)
+      (hag : ∀ b ∈ starOf a, ω b = ω' b) :
+      predOK M t h a c ω ↔ predOK M t h a c ω' := by
+    simp [predOK, hPredMassEq h a c ω ω' hag, hRefQEq h a c ω ω' hag,
+      hLightMassEq h a c ω ω' hag]
+
+  have hPredictiveEq (a : EvenRole n) (h : History n N δ)
+      (ω ω' : OddRole n → Fin N)
+      (hag : ∀ b ∈ starOf a, ω b = ω' b) :
+      predictive M t a h ω ↔ predictive M t a h ω' := by
+    unfold predictive
+    constructor
+    · rintro ⟨c, hc, hp⟩
+      exact ⟨c, hc, (hPredOKEq h a c ω ω' hag).mp hp⟩
+    · rintro ⟨c, hc, hp⟩
+      exact ⟨c, hc, (hPredOKEq h a c ω ω' hag).mpr hp⟩
+
+  have hEvenRowEq (h : History n N δ) (a : EvenRole n) (x : Fin N)
+      (ω ω' : OddRole n → Fin N)
+      (hag : ∀ b ∈ starOf a, ω b = ω' b) :
+      evenRow M t h ω a x = evenRow M t h ω' a x := by
+    unfold evenRow
+    split <;> simp [hPredOKEq h a _ ω ω' hag,
+      hAvgMarginalEq h a _ ω ω' x hag, hHeavyEq h a _ ω ω' hag,
+      hLightMassEq h a _ ω ω' hag]
+
+  refine ⟨oddRow_nonneg, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · intro h hv b y
+    have hg : groupValid M t h (groupOf δ b) := hv _ (groupOf_isGroup b)
+    simp [oddRow, hg]
+  · intro h ω a x
+    unfold evenRow
+    cases hc : centerOf M t h a with
+    | none => exact le_rfl
+    | some c =>
+      change 0 ≤ if predOK M t h a c ω ∧ x ∉ heavy M t h a c ω then
+        avgMarginal M t h a c ω x / lightMass M t h a c ω else 0
+      split_ifs with hp
+      · exact div_nonneg
+          (avgMarginal_nonneg h a c ω x hp.1.2.1)
+          (le_of_lt hp.1.2.2.2)
+      · exact le_rfl
+  · intro h ω a hv hp
+    obtain ⟨c, hc, hOK⟩ := hp
+    have hlight : 0 < lightMass M t h a c ω := hOK.2.2.2
+    have hsum : (∑ x : Fin N, evenRow M t h ω a x) =
+        (∑ x ∈ Finset.univ \ heavy M t h a c ω,
+          avgMarginal M t h a c ω x) / lightMass M t h a c ω := by
+      calc
+        (∑ x : Fin N, evenRow M t h ω a x) =
+            ∑ x ∈ Finset.univ, if x ∉ heavy M t h a c ω then
+              avgMarginal M t h a c ω x / lightMass M t h a c ω else 0 := by
+          apply Finset.sum_congr rfl
+          intro x hx
+          simp [evenRow, hc, hOK]
+        _ = ∑ x ∈ Finset.univ.filter (fun x => x ∉ heavy M t h a c ω),
+              avgMarginal M t h a c ω x / lightMass M t h a c ω := by
+          rw [← Finset.sum_filter]
+        _ = ∑ x ∈ Finset.univ \ heavy M t h a c ω,
+              avgMarginal M t h a c ω x / lightMass M t h a c ω := by
+          have hset : Finset.univ.filter (fun x : Fin N => x ∉ heavy M t h a c ω) =
+              Finset.univ \ heavy M t h a c ω := by
+            ext x
+            simp
+          rw [hset]
+        _ = (∑ x ∈ Finset.univ \ heavy M t h a c ω,
+              avgMarginal M t h a c ω x) / lightMass M t h a c ω := by
+          rw [← Finset.sum_div]
+    rw [hsum]
+    unfold lightMass
+    exact div_self hlight.ne'
+  · intro h ω a hv hpredict x hrowne b hadj
+    obtain ⟨c, hc, hOK⟩ := hpredict
+    have hxnot : x ∉ heavy M t h a c ω := by
+      by_contra hx
+      have hz : evenRow M t h ω a x = 0 := by simp [evenRow, hc, hOK, hx]
+      exact hrowne hz
+    have havgNe : avgMarginal M t h a c ω x ≠ 0 := by
+      intro hz
+      apply hrowne
+      simp [evenRow, hc, hOK, hxnot, hz]
+    have havgNN := avgMarginal_nonneg h a c ω x hOK.2.1
+    have havgPos : 0 < avgMarginal M t h a c ω x := by
+      by_contra hn
+      exact havgNe (le_antisymm (le_of_not_gt hn) havgNN)
+    have hPosteriorNN (w : Fin (kT n δ) → Fin N) :
+        0 ≤ posterior M t h a c ω w := by
+      unfold posterior
+      apply div_nonneg
+      · exact mul_nonneg ((tuplePrior M t c).nonneg w)
+          (subLik_nonneg h a c w ω)
+      · exact hOK.2.1.le
+    have hMarginalTermNN (w : Fin (kT n δ) → Fin N) :
+        0 ≤ posterior M t h a c ω w *
+          (((Finset.univ.filter fun i => w i = x).card : ℝ) / kT n δ) := by
+      apply mul_nonneg (hPosteriorNN w)
+      exact div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _)
+    have hsumPos : 0 < ∑ w : Fin (kT n δ) → Fin N,
+        posterior M t h a c ω w *
+          (((Finset.univ.filter fun i => w i = x).card : ℝ) / kT n δ) := by
+      simpa [avgMarginal] using havgPos
+    obtain ⟨w, hw, htermPos⟩ :=
+      (Finset.sum_pos_iff_of_nonneg (s := Finset.univ)
+        (f := fun w : Fin (kT n δ) → Fin N =>
+          posterior M t h a c ω w *
+            (((Finset.univ.filter fun i => w i = x).card : ℝ) / kT n δ))
+        (by intro w hw; exact hMarginalTermNN w)).mp hsumPos
+    have hposteriorPos : 0 < posterior M t h a c ω w := by
+      by_contra hn
+      have hz : posterior M t h a c ω w = 0 :=
+        le_antisymm (le_of_not_gt hn) (hPosteriorNN w)
+      rw [hz, zero_mul] at htermPos
+      exact (lt_irrefl 0 htermPos)
+    have hcountFracPos : 0 <
+        (((Finset.univ.filter fun i => w i = x).card : ℝ) / kT n δ) := by
+      by_contra hn
+      have hz : (((Finset.univ.filter fun i => w i = x).card : ℝ) / kT n δ) = 0 :=
+        le_antisymm (le_of_not_gt hn) (div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _))
+      rw [hz, mul_zero] at htermPos
+      exact (lt_irrefl 0 htermPos)
+    have hcountPos : 0 < ((Finset.univ.filter fun i => w i = x).card : ℝ) := by
+      by_contra hn
+      have hz : ((Finset.univ.filter fun i => w i = x).card : ℝ) = 0 :=
+        le_antisymm (le_of_not_gt hn) (Nat.cast_nonneg _)
+      have hzero :
+          (((Finset.univ.filter fun i => w i = x).card : ℝ) / kT n δ) = 0 := by
+        simp [hz]
+      rw [hzero] at hcountFracPos
+      exact (lt_irrefl 0 hcountFracPos)
+    have hcountNatPos : 0 < (Finset.univ.filter fun i => w i = x).card := by
+      exact_mod_cast hcountPos
+    obtain ⟨ii, hii⟩ := Finset.card_pos.mp hcountNatPos
+    have hwi : w ii = x := (Finset.mem_filter.mp hii).2
+    have hpriorSubPos : 0 < (tuplePrior M t c).w w * subLik M t h a c w ω := by
+      have hposteriorPos' :
+          0 < (tuplePrior M t c).w w * subLik M t h a c w ω / predMass M t h a c ω := by
+        simpa [posterior] using hposteriorPos
+      exact (div_pos_iff_of_pos_right hOK.2.1).mp hposteriorPos'
+    have hsubPos : 0 < subLik M t h a c w ω := by
+      by_contra hn
+      have hsuble : subLik M t h a c w ω ≤ 0 := le_of_not_gt hn
+      have hprodle : (tuplePrior M t c).w w * subLik M t h a c w ω ≤ 0 :=
+        mul_nonpos_of_nonneg_of_nonpos ((tuplePrior M t c).nonneg w) hsuble
+      exact (not_lt_of_ge hprodle) hpriorSubPos
+    let h' : History n N δ := History.setTuple h c w
+    have hgate : gate M t h' a c := by
+      unfold subLik at hsubPos
+      split_ifs at hsubPos with hgate
+      · exact hgate
+      · norm_num at hsubPos
+    have hStarPos : 0 < starLik M t h' a ω := by
+      simpa [h', subLik, hgate] using hsubPos
+    let q : Site n δ := groupOf δ b
+    have hqmem : q ∈ incGroups a := by
+      change p10_1kProjectedVertex (mS_le n δ) b.1 ∈
+        p10_1kIncidentOddGroups (mS_le n δ) a
+      exact (p10_1k_mem_incidentOddGroups (mS_le n δ) a _).mpr
+        ⟨b, hadj, rfl⟩
+    let labelFactor : Site n δ → ClIdx M → ℝ := fun q' z =>
+      ∏ b' ∈ (starOf a).filter (fun b' => groupOf δ b' = q'),
+        (labLaw M t h' b' z).w (ω b')
+    let Q : FinProb (ClIdx M) := clusterLaw M t h' q
+    let groupFactor : Site n δ → ℝ := fun q' =>
+      (clusterLaw M t h' q').expect (labelFactor q')
+    have hstarprod : 0 < ∏ q' ∈ incGroups a, groupFactor q' := by
+      change 0 < ∏ q' ∈ incGroups a,
+        (clusterLaw M t h' q').expect (fun z =>
+          ∏ b' ∈ (starOf a).filter (fun b' => groupOf δ b' = q'),
+            (labLaw M t h' b' z).w (ω b'))
+      exact hStarPos
+    have hlabelNN (q' : Site n δ) (z : ClIdx M) : 0 ≤ labelFactor q' z := by
+      unfold labelFactor
+      apply Finset.prod_nonneg
+      intro b' hb'
+      exact (labLaw M t h' b' z).nonneg (ω b')
+    have hfactorNN (q' : Site n δ) : 0 ≤ groupFactor q' := by
+      unfold groupFactor
+      apply expect_nonneg
+      exact hlabelNN q'
+    have hqfactorNe : groupFactor q ≠ 0 :=
+      (Finset.prod_ne_zero_iff.mp (ne_of_gt hstarprod)) q hqmem
+    have hqfactorPos : 0 < groupFactor q :=
+      lt_of_le_of_ne (hfactorNN q) (Ne.symm hqfactorNe)
+    have hsumFactorPos : 0 < ∑ z : ClIdx M, Q.w z * labelFactor q z := by
+      simpa [groupFactor, Q, FinProb.expect] using hqfactorPos
+    have hsumFactorTermNN (z : ClIdx M) : 0 ≤ Q.w z * labelFactor q z :=
+      mul_nonneg (Q.nonneg z) (hlabelNN q z)
+    obtain ⟨z, hz, htermPos⟩ :=
+      (Finset.sum_pos_iff_of_nonneg (s := Finset.univ)
+        (f := fun z : ClIdx M => Q.w z * labelFactor q z)
+        (by intro z hz; exact hsumFactorTermNN z)).mp hsumFactorPos
+    rcases z with ⟨i, j⟩
+    have hQatomPos : 0 < Q.w (⟨i, j⟩ : ClIdx M) := by
+      by_contra hn
+      have hz0 : Q.w (⟨i, j⟩ : ClIdx M) = 0 :=
+        le_antisymm (le_of_not_gt hn) (Q.nonneg _)
+      rw [hz0, zero_mul] at htermPos
+      exact (lt_irrefl 0 htermPos)
+    have hlabelProductPos : 0 < labelFactor q (⟨i, j⟩ : ClIdx M) := by
+      by_contra hn
+      have hz0 : labelFactor q (⟨i, j⟩ : ClIdx M) = 0 :=
+        le_antisymm (le_of_not_gt hn) (hlabelNN q _)
+      rw [hz0, mul_zero] at htermPos
+      exact (lt_irrefl 0 htermPos)
+    have hgroupValid : groupValid M t h' q := hgate.2.2 q hqmem
+    have htiltSum : 0 < ∑ j' : Fin (M.K (t q.1)), tiltWeight M t h' q j' := by
+      rcases hgroupValid with ⟨_, _, _, _, _, hpos⟩
+      exact hpos
+    have hbranch : groupValid M t h' q ∧
+        0 < ∑ j' : Fin (M.K (t q.1)), tiltWeight M t h' q j' :=
+      ⟨hgroupValid, htiltSum⟩
+    let norm : FinProb (Fin (M.K (t q.1))) :=
+      normalizeLaw (tiltWeight M t h' q) (tiltWeight_nonneg M t h' q) htiltSum
+    have hQmapPos : 0 <
+        (FinProb.map norm (fun j' => (⟨t q.1, j'⟩ : ClIdx M))).w
+          (⟨i, j⟩ : ClIdx M) := by
+      simpa [Q, clusterLaw, hbranch, norm] using hQatomPos
+    change 0 < ∑ j' : Fin (M.K (t q.1)),
+      if (⟨t q.1, j'⟩ : ClIdx M) = (⟨i, j⟩ : ClIdx M) then norm.w j' else 0 at hQmapPos
+    obtain ⟨j₀, hj₀, hmapTermPos⟩ :=
+      (Finset.sum_pos_iff_of_nonneg (s := Finset.univ)
+        (f := fun j' : Fin (M.K (t q.1)) =>
+          if (⟨t q.1, j'⟩ : ClIdx M) = (⟨i, j⟩ : ClIdx M) then norm.w j' else 0)
+        (by intro j' hj'; split_ifs <;> simp [norm.nonneg])).mp hQmapPos
+    have hmapEq : (⟨t q.1, j₀⟩ : ClIdx M) = (⟨i, j⟩ : ClIdx M) := by
+      by_contra hne
+      simp [hne] at hmapTermPos
+    have hnormPos : 0 < norm.w j₀ := by simpa [hmapEq] using hmapTermPos
+    rcases Sigma.mk.inj_iff.mp hmapEq with ⟨hi, hji⟩
+    subst i
+    have hjEq : j₀ = j := eq_of_heq hji
+    have hnormJPos : 0 < norm.w j := by simpa [hjEq] using hnormPos
+    have hweightPos : 0 < tiltWeight M t h' q j := by
+      have hdivPos : 0 < tiltWeight M t h' q j /
+          (∑ j' : Fin (M.K (t q.1)), tiltWeight M t h' q j') := by
+        simpa [norm, normalizeLaw] using hnormJPos
+      exact (div_pos_iff_of_pos_right htiltSum).mp hdivPos
+    have hkept : j ∈ tiltKept M t h' q := by
+      unfold tiltWeight at hweightPos
+      split_ifs at hweightPos with hkeep
+      · exact hkeep
+      · norm_num at hweightPos
+    have hmassBound : Real.exp (-(3 / 2 : ℝ) * kT n δ *
+        (realizedList M t h' q).card) ≤
+        lawMassOn (maskedCluster M (t q.1) (h'.mask q) j)
+          (hitSet M t h' q) := by
+      have hmem : j ∈ Finset.univ.filter (fun j' =>
+          Real.exp (-(3 / 2 : ℝ) * kT n δ * (realizedList M t h' q).card) ≤
+            lawMassOn (maskedCluster M (t q.1) (h'.mask q) j') (hitSet M t h' q) ∧
+          ∀ c' ∈ realizedList M t h' q,
+            (if c'.1 = q.1 then Real.exp ((-Real.log 2 + (8 / 100 : ℝ) * aG n δ) *
+                kT n δ) else Real.exp (-(6 / 5 : ℝ) * kT n δ)) *
+              lawMassOn (maskedCluster M (t q.1) (h'.mask q) j')
+                (hitSetWithout M t h' q c') ≤
+                lawMassOn (maskedCluster M (t q.1) (h'.mask q) j') (hitSet M t h' q)) := by
+        simpa [tiltKept] using hkept
+      exact (Finset.mem_filter.mp hmem).2.1
+    have hlawCond : groupValid M t h' (groupOf δ b) ∧
+        Real.exp (-(3 / 2 : ℝ) * kT n δ *
+          (realizedList M t h' (groupOf δ b)).card) ≤
+        lawMassOn (maskedCluster M (t (groupOf δ b).1)
+          (h'.mask (groupOf δ b)) j) (hitSet M t h' (groupOf δ b)) := by
+      simpa [q] using And.intro hgroupValid hmassBound
+    have hbStar : b ∈ starOf a := Finset.mem_filter.mpr ⟨Finset.mem_univ _, hadj⟩
+    have hbFactor : b ∈ (starOf a).filter (fun b' => groupOf δ b' = q) :=
+      Finset.mem_filter.mpr ⟨hbStar, rfl⟩
+    have hlabelProductNe : labelFactor q (⟨t q.1, j⟩ : ClIdx M) ≠ 0 := by
+      simpa [q] using (ne_of_gt hlabelProductPos)
+    have hlabAtomNe :
+        (labLaw M t h' b (⟨t q.1, j⟩ : ClIdx M)).w (ω b) ≠ 0 := by
+      unfold labelFactor at hlabelProductNe
+      exact (Finset.prod_ne_zero_iff.mp hlabelProductNe) b hbFactor
+    have hlabAtomPos : 0 <
+        (labLaw M t h' b (⟨t q.1, j⟩ : ClIdx M)).w (ω b) :=
+      lt_of_le_of_ne
+        ((labLaw M t h' b (⟨t q.1, j⟩ : ClIdx M)).nonneg (ω b))
+        (Ne.symm hlabAtomNe)
+    have hmassPos : 0 < lawMassOn (maskedCluster M (t q.1) (h'.mask q) j)
+        (hitSet M t h' q) := lt_of_lt_of_le (Real.exp_pos _) hmassBound
+    have hlabEq : labLaw M t h' b (⟨t q.1, j⟩ : ClIdx M) =
+        restrictOrSelf (maskedCluster M (t q.1) (h'.mask q) j)
+          (hitSet M t h' q) := by
+      unfold labLaw
+      rw [ite_eq_left hlawCond]
+    have hrestrictedPos : 0 <
+        (restrictOrSelf (maskedCluster M (t q.1) (h'.mask q) j)
+          (hitSet M t h' q)).w (ω b) := by
+      rw [← hlabEq]
+      exact hlabAtomPos
+    have hωHit : ω b ∈ hitSet M t h' q := by
+      by_contra hy
+      have hz : (restrictOrSelf (maskedCluster M (t q.1) (h'.mask q) j)
+          (hitSet M t h' q)).w (ω b) = 0 := by
+        simp [restrictOrSelf, hmassPos, Law.restrict, hy]
+      rw [hz] at hrestrictedPos
+      exact (lt_irrefl 0 hrestrictedPos)
+    let s : Site n δ := evenSite δ a
+    have hsEnv : s ∈ p10_1kProjectedNeighborEnvelope q := by
+      simpa [s, q, evenSite, groupOf] using
+        p10_1k_evenSite_mem_oddGroupEnvelope_of_adjacent (mS_le n δ) a b hadj
+    have hsSlice : s.2 ∈ sliceSites δ s.1 := by
+      change p10_1k_projectedWord (n - mS n δ)
+          (p10_1kResidualWord (mS_le n δ) a.1) ∈
+        p10_1kProjectedEvenSites (mS_le n δ)
+          (p10_1kSpecialSlice (mS_le n δ) a.1)
+      exact p10_1kProjectedEvenRole_mem_sites (mS_le n δ) a
+    have hsInc : s ∈ incidentSites δ q := by
+      unfold incidentSites
+      exact Finset.mem_filter.mpr ⟨hsEnv, hsSlice⟩
+    have hrealized : c ∈ realizedList M t h' q := by
+      cases hs : selected M t h' s with
+      | none =>
+        have hselNone : selected M t h' (evenSite δ a) = none := by
+          simpa [s] using hs
+        have hfalse : False := by
+          simpa [centerOf, hselNone] using hgate.1
+        exact hfalse.elim
+      | some loc =>
+        have hpair : (s.1, loc) = c := by
+          simpa [centerOf, s, hs] using hgate.1
+        have hloc : loc = c.2 := congrArg Prod.snd hpair
+        have hsel : selected M t h' s = some c.2 := by
+          simp [hs, hloc]
+        have hId : (s.1, c.2) = c := by
+          calc
+            (s.1, c.2) = (s.1, loc) := by rw [hloc]
+            _ = c := hpair
+        unfold realizedList
+        apply Finset.mem_biUnion.mpr
+        refine ⟨s, hsInc, ?_⟩
+        simp [hsel, hId]
+    have hcommon : ∀ c' ∈ realizedList M t h' q, ∀ i,
+        Hits E G (History.tup h' c' i) (ω b) := by
+      simpa [hitSet] using (Finset.mem_filter.mp hωHit).2
+    have hhit := hcommon c hrealized ii
+    simpa [h', History.tup, History.setTuple, hwi] using hhit
+  · intro a h ω ω' hag
+    exact propext (hPredictiveEq a h ω ω' hag)
+  · intro a h x ω ω' hag
+    exact hEvenRowEq h a x ω ω' hag
+  · intro y b
+    unfold oddMean
+    apply mul_nonneg (Nat.cast_nonneg N)
+    apply expect_nonneg
+    intro h
+    exact oddRow_nonneg h b y
+  · intro x a
+    unfold evenMean
+    apply mul_nonneg (Nat.cast_nonneg N)
+    apply expect_nonneg
+    intro h
+    apply Finset.sum_nonneg
+    intro c hc
+    apply mul_nonneg ((FinProb.pi (clusterLaw M t h)).nonneg c)
+    apply expect_nonneg
+    intro ω
+    exact (show 0 ≤ evenRow M t h ω a x from by
+      unfold evenRow
+      cases centerOf M t h a <;> simp
+      split_ifs with hp
+      · exact div_nonneg
+          (avgMarginal_nonneg h a _ ω x hp.1.2.1)
+          (le_of_lt hp.1.2.2.2)
+      · exact le_rfl)
 
 /-- **d2** = P10.1d (10:101–117; ~500 lines; new probabilistic argument over
 the global experiment). All groups are valid with probability at least `0.99`:

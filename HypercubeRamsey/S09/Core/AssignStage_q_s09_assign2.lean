@@ -2621,4 +2621,1257 @@ theorem p92_even_loads_core (P : Params9) (hP : P.Valid) (κ : ℝ) (hκ : 0 < �
         simpa [threshold, U, Q, FinProb.pr] using hscatter
   exact hTargetLe
 
+private theorem hitSet9_updAnc_away {P : Params9} {n N : ℕ}
+    {I : IDMap9 P n} (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω : Outcome9 I N) (ids : Finset I.ID) (c : I.ID) (x : Fin N)
+    (hc : c ∉ ids) :
+    hitSet9 E G (updAnc9 ω c x) ids = hitSet9 E G ω ids := by
+  classical
+  ext y
+  simp only [hitSet9, Finset.mem_filter, Finset.mem_univ, true_and]
+  constructor
+  · intro hy d hd
+    have hne : d ≠ c := by
+      intro heq
+      subst d
+      exact hc hd
+    have hdy := hy d hd
+    rw [anc9_update_ne ω c d x hne] at hdy
+    exact hdy
+  · intro hy d hd
+    have hne : d ≠ c := by
+      intro heq
+      subst d
+      exact hc hd
+    have hdy := hy d hd
+    rw [anc9_update_ne ω c d x hne]
+    exact hdy
+
+private theorem rowLaw9_updAnc_away {P : Params9} {n N : ℕ} {M : TagMix N}
+    {I : IDMap9 P n} (S : Setup9 P n N M) (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω : Outcome9 I N) (b : OddSites9 n) (c : I.ID) (x : Fin N)
+    (hc : c ∉ I.seen b.1) :
+  rowLaw9 S E G (updAnc9 ω c x) b = rowLaw9 S E G ω b := by
+  unfold rowLaw9
+  rw [maskedLaw9_updAnc (S := S) (b := b) (ω := ω) (c := c) (x := x)]
+  rw [hitSet9_updAnc_away E G ω (I.seen b.1) c x hc]
+
+private theorem delLaw9_updAnc_away {P : Params9} {n N : ℕ} {M : TagMix N}
+    {I : IDMap9 P n} (S : Setup9 P n N M) (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω : Outcome9 I N) (b : OddSites9 n) (t c : I.ID) (x : Fin N)
+    (hc : c ∉ I.seen b.1) :
+  delLaw9 S E G (updAnc9 ω c x) b t = delLaw9 S E G ω b t := by
+  unfold delLaw9
+  rw [maskedLaw9_updAnc (S := S) (b := b) (ω := ω) (c := c) (x := x)]
+  apply congrArg (restrictOr9 (maskedLaw9 S ω b))
+  apply hitSet9_updAnc_away E G ω ((I.seen b.1).erase t) c x
+  intro hmem
+  exact hc (Finset.mem_of_mem_erase hmem)
+
+private theorem fullOrder9_mem_seen {P : Params9} {n : ℕ} {I : IDMap9 P n}
+    {v : EvenSites9 n} {b : OddSites9 n} {d : I.ID}
+    (hb : (cube n).Adj v.1 b.1) (hd : d ∈ fullOrder9 I v b) : d ∈ I.seen b.1 := by
+  classical
+  unfold fullOrder9 at hd
+  rcases List.mem_append.mp hd with houtcore | htarget
+  · rcases List.mem_append.mp houtcore with hout | hcore
+    · exact (Finset.mem_sdiff.mp (Finset.mem_toList.mp hout)).1
+    · have hcore' : d ∈ coreIDs9 I v b := Finset.mem_toList.mp hcore
+      exact (Finset.mem_inter.mp (Finset.mem_erase.mp hcore').2).1
+  · have h : d = I.center v.1 := by simpa using htarget
+    rw [h]
+    exact center_mem_seen9 ⟨b, hb⟩
+
+private theorem prefixLaw9_updAnc_away {P : Params9} {n N : ℕ}
+    {I : IDMap9 P n} (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω : Outcome9 I N) (base : Law N) (order : List I.ID) (k : ℕ)
+    (c : I.ID) (x : Fin N) (haway : ∀ d ∈ order, d ≠ c) :
+    prefixLaw9 E G (updAnc9 ω c x) base order k = prefixLaw9 E G ω base order k := by
+  unfold prefixLaw9
+  congr 1
+  apply hitSet9_updAnc_away E G ω (order.take k).toFinset c x
+  intro hc
+  have hmem : c ∈ order :=
+    List.Sublist.subset (List.take_sublist k order) (List.mem_toFinset.mp hc)
+  exact haway c hmem rfl
+
+private theorem orderRegular9_updAnc_away {P : Params9} {n N : ℕ}
+    {I : IDMap9 P n} (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω : Outcome9 I N) (base₁ base₂ : Law N) (order : List I.ID)
+    (c : I.ID) (x : Fin N) (hbase : base₁ = base₂)
+    (haway : ∀ d ∈ order, d ≠ c) :
+    orderRegular9 E G (updAnc9 ω c x) base₁ order ↔ orderRegular9 E G ω base₂ order := by
+  have hprefix (k : ℕ) :
+      prefixLaw9 E G (updAnc9 ω c x) base₁ order k = prefixLaw9 E G ω base₂ order k := by
+    rw [hbase]
+    exact prefixLaw9_updAnc_away E G ω base₂ order k c x haway
+  have hanc (d : I.ID) (hd : d ∈ order) :
+      anc9 (updAnc9 ω c x) d = anc9 ω d := by
+    exact anc9_update_ne ω c d x (haway d hd)
+  constructor
+  · intro h k d hk hprev
+    have hd : d ∈ order := List.mem_of_getElem? hk
+    have hprev' : ∀ j d', j < k → order[j]? = some d' →
+        (49 / 100 : ℝ) ≤ rowDeg E G (anc9 (updAnc9 ω c x) d')
+          (prefixLaw9 E G (updAnc9 ω c x) base₁ order j) := by
+      intro j d' hj hj'
+      have hd' : d' ∈ order := List.mem_of_getElem? hj'
+      simpa [hanc d' hd', hprefix j] using hprev j d' hj hj'
+    have hval := h k d hk hprev'
+    simpa [hanc d hd, hprefix k] using hval
+  · intro h k d hk hprev
+    have hd : d ∈ order := List.mem_of_getElem? hk
+    have hprev' : ∀ j d', j < k → order[j]? = some d' →
+        (49 / 100 : ℝ) ≤ rowDeg E G (anc9 ω d')
+          (prefixLaw9 E G ω base₂ order j) := by
+      intro j d' hj hj'
+      have hd' : d' ∈ order := List.mem_of_getElem? hj'
+      simpa [hanc d' hd', hprefix j] using hprev j d' hj hj'
+    have hval := h k d hk hprev'
+    simpa [hanc d hd, hprefix k] using hval
+
+private theorem coreOrder9_mem_seen {P : Params9} {n : ℕ} {I : IDMap9 P n}
+    {v : EvenSites9 n} {b : OddSites9 n} {d : I.ID}
+    (hd : d ∈ coreOrder9 I v b) : d ∈ I.seen b.1 := by
+  have hcore : d ∈ coreIDs9 I v b := Finset.mem_toList.mp hd
+  exact (Finset.mem_inter.mp (Finset.mem_erase.mp hcore).2).1
+
+private theorem targetFrac9_updAnc_away {P : Params9} {n N : ℕ} {M : TagMix N}
+    {I : IDMap9 P n} (S : Setup9 P n N M) (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω : Outcome9 I N) (v : EvenSites9 n) (b : StarOdd9 v) (c : I.ID) (x : Fin N)
+    (hc : c ∉ I.seen b.1.1) :
+    targetFrac9 S E G (updAnc9 ω c x) v b.1 = targetFrac9 S E G ω v b.1 := by
+  have hcenter : c ≠ I.center v.1 := by
+    intro heq
+    subst c
+    exact hc (center_mem_seen9 b)
+  unfold targetFrac9
+  rw [anc9_update_ne ω c (I.center v.1) x hcenter.symm]
+  rw [delLaw9_updAnc_away S E G ω b.1 (I.center v.1) c x hc]
+
+set_option maxHeartbeats 1000000 in
+private theorem starValid9_updAnc_away {P : Params9} {n N : ℕ} {M : TagMix N}
+    {I : IDMap9 P n} (S : Setup9 P n N M) (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω : Outcome9 I N) (v : EvenSites9 n) (c : I.ID) (x : Fin N)
+    (haway : ∀ b : StarOdd9 v, c ∉ I.seen b.1.1) :
+    starValid9 S E G (updAnc9 ω c x) v ↔ starValid9 S E G ω v := by
+  have hreg :
+      starRegular9 S E G (updAnc9 ω c x) v ↔ starRegular9 S E G ω v := by
+    unfold starRegular9
+    constructor
+    · intro h b hb
+      let hb' : StarOdd9 v := ⟨b, hb⟩
+      have horder : ∀ d ∈ fullOrder9 I v b, d ≠ c := by
+        intro d hd heq
+        subst d
+        exact haway hb' (fullOrder9_mem_seen hb hd)
+      have hcore : ∀ d ∈ coreOrder9 I v b, d ≠ c := by
+        intro d hd heq
+        subst d
+        exact haway hb' (coreOrder9_mem_seen hd)
+      rcases h b hb with ⟨h₁, h₂, h₃⟩
+      refine ⟨?_, ?_, ?_⟩
+      · exact (orderRegular9_updAnc_away E G ω
+          (maskedLaw9 S (updAnc9 ω c x) b) (maskedLaw9 S ω b)
+          (fullOrder9 I v b) c x (maskedLaw9_updAnc S b ω c x) horder).mp h₁
+      · exact (orderRegular9_updAnc_away E G ω (siteSecond9 S b.1) (siteSecond9 S b.1)
+          (fullOrder9 I v b) c x rfl horder).mp h₂
+      · exact (orderRegular9_updAnc_away E G ω (siteSecond9 S b.1) (siteSecond9 S b.1)
+          (coreOrder9 I v b) c x rfl hcore).mp h₃
+    · intro h b hb
+      let hb' : StarOdd9 v := ⟨b, hb⟩
+      have horder : ∀ d ∈ fullOrder9 I v b, d ≠ c := by
+        intro d hd heq
+        subst d
+        exact haway hb' (fullOrder9_mem_seen hb hd)
+      have hcore : ∀ d ∈ coreOrder9 I v b, d ≠ c := by
+        intro d hd heq
+        subst d
+        exact haway hb' (coreOrder9_mem_seen hd)
+      rcases h b hb with ⟨h₁, h₂, h₃⟩
+      refine ⟨?_, ?_, ?_⟩
+      · exact (orderRegular9_updAnc_away E G ω
+          (maskedLaw9 S (updAnc9 ω c x) b) (maskedLaw9 S ω b)
+          (fullOrder9 I v b) c x (maskedLaw9_updAnc S b ω c x) horder).mpr h₁
+      · exact (orderRegular9_updAnc_away E G ω (siteSecond9 S b.1) (siteSecond9 S b.1)
+          (fullOrder9 I v b) c x rfl horder).mpr h₂
+      · exact (orderRegular9_updAnc_away E G ω (siteSecond9 S b.1) (siteSecond9 S b.1)
+          (coreOrder9 I v b) c x rfl hcore).mpr h₃
+  have hgain :
+      starGain9 S E G (updAnc9 ω c x) v = starGain9 S E G ω v := by
+    unfold starGain9
+    apply Finset.sum_congr rfl
+    intro b hb
+    exact congrArg Real.log (targetFrac9_updAnc_away S E G ω v b c x (haway b))
+  unfold starValid9
+  exact and_congr hreg (by rw [hgain])
+
+private theorem updAnc9_commute {P : Params9} {n N : ℕ} {I : IDMap9 P n}
+    (ω : Outcome9 I N) (c d : I.ID) (x y : Fin N) (hcd : c ≠ d) :
+    updAnc9 (updAnc9 ω c x) d y = updAnc9 (updAnc9 ω d y) c x := by
+  funext z
+  by_cases hzc : z = Sum.inl c
+  · subst z
+    simp [updAnc9, Function.update, hcd]
+    rfl
+  · by_cases hzd : z = Sum.inl d
+    · subst z
+      simp [updAnc9, Function.update, hcd, hcd.symm]
+      rfl
+    · simp [updAnc9, Function.update, hzc, hzd]
+  all_goals rfl
+
+set_option maxHeartbeats 1000000 in
+private theorem starLik9_updAnc_away {P : Params9} {n N : ℕ} {M : TagMix N}
+    {I : IDMap9 P n} (S : Setup9 P n N M) (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω : Outcome9 I N) (v : EvenSites9 n) (c : I.ID) (z y : Fin N)
+    (hcz : c ≠ I.center v.1) (haway : ∀ b : StarOdd9 v, c ∉ I.seen b.1.1)
+    (ys : StarOdd9 v → Fin N) :
+    starLik9 S E G (updAnc9 ω c z) v y ys = starLik9 S E G ω v y ys := by
+  have hcommute := updAnc9_commute ω c (I.center v.1) z y hcz
+  unfold starLik9
+  rw [hcommute]
+  have hvalid := starValid9_updAnc_away S E G
+    (updAnc9 ω (I.center v.1) y) v c z haway
+  have hvalidEq :
+      starValid9 S E G (updAnc9 (updAnc9 ω (I.center v.1) y) c z) v =
+        starValid9 S E G (updAnc9 ω (I.center v.1) y) v := propext hvalid
+  rw [hvalidEq]
+  congr 1
+  apply Finset.prod_congr rfl
+  intro b hb
+  exact congrArg (fun μ : Law N => μ.w (ys b))
+    (rowLaw9_updAnc_away S E G (updAnc9 ω (I.center v.1) y) b.1 c z (haway b))
+
+set_option maxHeartbeats 1000000 in
+private theorem starMarg9_updAnc_away {P : Params9} {n N : ℕ} {M : TagMix N}
+    {I : IDMap9 P n} (S : Setup9 P n N M) (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω : Outcome9 I N) (v : EvenSites9 n) (c : I.ID) (z : Fin N)
+    (hcz : c ≠ I.center v.1) (haway : ∀ b : StarOdd9 v, c ∉ I.seen b.1.1)
+    (ys : StarOdd9 v → Fin N) :
+    starMarg9 S E G (updAnc9 ω c z) v ys = starMarg9 S E G ω v ys := by
+  unfold starMarg9
+  apply Finset.sum_congr rfl
+  intro y hy
+  exact congrArg (fun z : ℝ => (siteFirst9 S v.1).w y * z)
+    (starLik9_updAnc_away S E G ω v c z y hcz haway ys)
+
+private theorem starRef9_updAnc_away {P : Params9} {n N : ℕ} {M : TagMix N}
+    {I : IDMap9 P n} (S : Setup9 P n N M) (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω : Outcome9 I N) (v : EvenSites9 n) (c : I.ID) (z : Fin N)
+    (haway : ∀ b : StarOdd9 v, c ∉ I.seen b.1.1)
+    (ys : StarOdd9 v → Fin N) :
+    starRef9 S E G (updAnc9 ω c z) v ys = starRef9 S E G ω v ys := by
+  unfold starRef9
+  apply Finset.prod_congr rfl
+  intro b hb
+  exact congrArg (fun μ : Law N => μ.w (ys b))
+    (delLaw9_updAnc_away S E G ω b.1 (I.center v.1) c z (haway b))
+
+private theorem predFail9_updAnc_away {P : Params9} {n N : ℕ} {M : TagMix N}
+    {I : IDMap9 P n} (S : Setup9 P n N M) (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω : Outcome9 I N) (v : EvenSites9 n) (c : I.ID) (z : Fin N)
+    (hcz : c ≠ I.center v.1) (haway : ∀ b : StarOdd9 v, c ∉ I.seen b.1.1)
+    (ys : StarOdd9 v → Fin N) :
+    predFail9 S E G (updAnc9 ω c z) v ys = predFail9 S E G ω v ys := by
+  unfold predFail9
+  rw [starMarg9_updAnc_away S E G ω v c z hcz haway ys,
+    starRef9_updAnc_away S E G ω v c z haway ys]
+
+private theorem evenRowAt9_updAnc_away {P : Params9} {n N : ℕ} {M : TagMix N}
+    {I : IDMap9 P n} (S : Setup9 P n N M) (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω : Outcome9 I N) (v : EvenSites9 n) (c : I.ID) (z : Fin N)
+    (hcz : c ≠ I.center v.1) (haway : ∀ b : StarOdd9 v, c ∉ I.seen b.1.1)
+    (ys : StarOdd9 v → Fin N) (y : Fin N) :
+    evenRowAt9 S E G (updAnc9 ω c z) v ys y = evenRowAt9 S E G ω v ys y := by
+  unfold evenRowAt9
+  rw [starLik9_updAnc_away S E G ω v c z y hcz haway ys,
+    starMarg9_updAnc_away S E G ω v c z hcz haway ys]
+
+set_option maxHeartbeats 1000000 in
+private theorem evenStar9_updAnc_away {P : Params9} {n N : ℕ} {M : TagMix N}
+    {I : IDMap9 P n} (S : Setup9 P n N M) (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω : Outcome9 I N) (v : EvenSites9 n) (c : I.ID) (z y : Fin N)
+    (hcz : c ≠ I.center v.1) (haway : ∀ b : StarOdd9 v, c ∉ I.seen b.1.1) :
+    evenStar9 S E G (updAnc9 ω c z) v y = evenStar9 S E G ω v y := by
+  unfold evenStar9
+  apply Finset.sum_congr rfl
+  intro ys hys
+  have hactual : anc9 (updAnc9 ω c z) (I.center v.1) = anc9 ω (I.center v.1) :=
+    anc9_update_ne ω c (I.center v.1) z hcz.symm
+  rw [hactual]
+  rw [starLik9_updAnc_away S E G ω v c z (anc9 ω (I.center v.1)) hcz haway ys]
+  rw [predFail9_updAnc_away S E G ω v c z hcz haway ys]
+  rw [evenRowAt9_updAnc_away S E G ω v c z hcz haway ys y]
+
+private theorem siteNear9_of_seen_center9 {P : Params9} {n : ℕ} {I : IDMap9 P n}
+    {u v : EvenSites9 n} {b : OddSites9 n}
+    (hbv : (cube n).Adj v.1 b.1) (hseen : I.center u.1 ∈ I.seen b.1) :
+    siteNear9 P n u.1 v.1 := by
+  classical
+  change I.center u.1 ∈ seenIDs9 I.center b.1 at hseen
+  rcases Finset.mem_image.mp hseen with ⟨w, hw, hcenter⟩
+  have hbw : (cube n).Adj b.1 w := (Finset.mem_filter.mp hw).2
+  have hwb : _root_.hammingDist w b.1 = 1 := by
+    rw [_root_.hammingDist_comm]
+    change _
+    exact hbw
+  have hbv' : _root_.hammingDist b.1 v.1 = 1 := by
+    rw [_root_.hammingDist_comm]
+    change _
+    exact hbv
+  have hvw : _root_.hammingDist v.1 w ≤ 2 := by
+    calc
+      _ ≤ _root_.hammingDist v.1 b.1 + _root_.hammingDist b.1 w :=
+        _root_.hammingDist_triangle _ _ _
+      _ = _root_.hammingDist b.1 v.1 + _root_.hammingDist w b.1 := by
+        rw [_root_.hammingDist_comm v.1 b.1, _root_.hammingDist_comm b.1 w]
+      _ = 2 := by rw [hbv', hwb]
+  constructor
+  · have hslice : specialWord9 (P.m n) u.1 = specialWord9 (P.m n) w := by
+      calc
+        specialWord9 (P.m n) u.1 = (I.center u.1).slice := (I.center_slice u.1).symm
+        _ = (I.center w).slice := by rw [hcenter]
+        _ = specialWord9 (P.m n) w := I.center_slice w
+    calc
+      _ = _root_.hammingDist (specialWord9 (P.m n) w) (specialWord9 (P.m n) v.1) := by
+        rw [hslice]
+      _ = _root_.hammingDist (specialWord9 (P.m n) v.1) (specialWord9 (P.m n) w) :=
+        _root_.hammingDist_comm _ _
+      _ ≤ _root_.hammingDist v.1 w :=
+        special_hamming_le_full9 (m := P.m n) v.1 w
+      _ ≤ 2 := hvw
+      _ ≤ 4 := by omega
+  · have hloc : (I.center u.1).location = (I.center w).location :=
+      congrArg CenterID9.location hcenter.symm
+    have hu : _root_.hammingDist (residualWord9 (P.m n) u.1) (I.center u.1).location ≤
+        P.radius n := by
+      rw [_root_.hammingDist_comm]
+      exact I.center_near u.1
+    have hw : _root_.hammingDist (I.center u.1).location (residualWord9 (P.m n) w) ≤
+        P.radius n := by
+      simpa [hloc] using I.center_near w
+    have hresuw : _root_.hammingDist (residualWord9 (P.m n) u.1)
+        (residualWord9 (P.m n) w) ≤ P.radius n + P.radius n := by
+      calc
+        _ ≤ _root_.hammingDist (residualWord9 (P.m n) u.1) (I.center u.1).location +
+            _root_.hammingDist (I.center u.1).location (residualWord9 (P.m n) w) :=
+              _root_.hammingDist_triangle _ _ _
+        _ ≤ P.radius n + P.radius n := Nat.add_le_add hu hw
+    have hresvw : _root_.hammingDist (residualWord9 (P.m n) v.1)
+        (residualWord9 (P.m n) w) ≤ 2 :=
+      (residual_hamming_le_full9 (m := P.m n) v.1 w).trans hvw
+    have hreswv : _root_.hammingDist (residualWord9 (P.m n) w)
+        (residualWord9 (P.m n) v.1) ≤ 2 := by
+      rw [_root_.hammingDist_comm]
+      exact hresvw
+    calc
+      _ ≤ _root_.hammingDist (residualWord9 (P.m n) u.1) (residualWord9 (P.m n) w) +
+          _root_.hammingDist (residualWord9 (P.m n) w) (residualWord9 (P.m n) v.1) :=
+            _root_.hammingDist_triangle _ _ _
+      _ ≤ (P.radius n + P.radius n) + 2 := Nat.add_le_add hresuw hreswv
+      _ ≤ 4 * P.radius n + 8 := by omega
+
+private theorem targetCenter9_not_seen_of_not_near {P : Params9} {n : ℕ} {I : IDMap9 P n}
+    {u v : EvenSites9 n} {b : OddSites9 n}
+    (hnot : ¬ siteNear9 P n u.1 v.1) (hbv : (cube n).Adj v.1 b.1) :
+    I.center u.1 ∉ I.seen b.1 := by
+  intro hseen
+  exact hnot (siteNear9_of_seen_center9 hbv hseen)
+
+private theorem center_mem_starScope9 {P : Params9} {n : ℕ} {I : IDMap9 P n}
+    (v : EvenSites9 n) (hn : 0 < n) :
+    Sum.inl (I.center v.1) ∈ starScope9 I v := by
+  classical
+  let i : Fin n := ⟨0, hn⟩
+  let w := cubeFlip v.1 i
+  have hwodd : ¬ IsEvenRole w := by
+    dsimp [w]
+    rw [cubeFlip_parity]
+    exact not_not.mpr v.2
+  let b : OddSites9 n := ⟨w, hwodd⟩
+  have hadj : (cube n).Adj v.1 b.1 := by
+    dsimp [b, w]
+    exact cubeFlip_adj v.1 i
+  unfold starScope9
+  apply Finset.mem_biUnion.mpr
+  refine ⟨b, Finset.mem_filter.mpr ⟨Finset.mem_univ _, hadj⟩, ?_⟩
+  apply Finset.mem_union_left
+  apply Finset.mem_image.mpr
+  exact ⟨I.center v.1, center_mem_seen9 ⟨b, hadj⟩, rfl⟩
+
+private theorem separated_pair_not_near9 {P : Params9} {n k : ℕ}
+    (a : Fin k → EvenSites9 n)
+    (hsep : ∀ i j : Fin k, j < i → ¬ siteNear9 P n (a i).1 (a j).1)
+    {i j : Fin k} (hne : i ≠ j) : ¬ siteNear9 P n (a i).1 (a j).1 := by
+  by_cases hji : j < i
+  · exact hsep i j hji
+  · have hij : i < j := by omega
+    intro hnear
+    exact hsep j i hij (siteNear9_symm (P := P) (n := n) (a i).1 (a j).1 hnear)
+
+private theorem otherTarget9_not_seen {P : Params9} {n k : ℕ}
+    {I : IDMap9 P n} (a : Fin k → EvenSites9 n)
+    (hsep : ∀ i j : Fin k, j < i → ¬ siteNear9 P n (a i).1 (a j).1)
+    {i j : Fin k} (hne : i ≠ j) (b : StarOdd9 (a i)) :
+    I.center (a j).1 ∉ I.seen b.1.1 :=
+  targetCenter9_not_seen_of_not_near (u := a j) (v := a i)
+    (separated_pair_not_near9 a hsep (i := j) (j := i) hne.symm) b.2
+
+private noncomputable def targetAnchorVars9 {P : Params9} {n k : ℕ} {I : IDMap9 P n}
+    (a : Fin k → EvenSites9 n) : Finset (I.ID ⊕ OddSites9 n) :=
+  Finset.univ.image (fun i : Fin k => Sum.inl (I.center (a i).1))
+
+private noncomputable def targetAnchorEquiv9 {P : Params9} {n k : ℕ} {I : IDMap9 P n}
+    (a : Fin k → EvenSites9 n)
+    (hsep : ∀ i j : Fin k, j < i → ¬ siteNear9 P n (a i).1 (a j).1) :
+    Fin k ≃ targetAnchorVars9 (I := I) a := by
+  classical
+  let f : Fin k → targetAnchorVars9 (I := I) a := fun i =>
+    ⟨Sum.inl (I.center (a i).1), Finset.mem_image.mpr ⟨i, Finset.mem_univ _, rfl⟩⟩
+  have hf : Function.Injective f := by
+    intro i j hij
+    apply targetCenters_injective9 a hsep
+    exact Sum.inl.inj (congrArg Subtype.val hij)
+  have hsurj : Function.Surjective f := by
+    intro q
+    rcases Finset.mem_image.mp q.2 with ⟨i, hi, hqi⟩
+    refine ⟨i, ?_⟩
+    apply Subtype.ext
+    exact hqi
+  exact Equiv.ofBijective f ⟨hf, hsurj⟩
+
+private theorem targetAnchorEquiv9_apply {P : Params9} {n k : ℕ} {I : IDMap9 P n}
+    (a : Fin k → EvenSites9 n)
+    (hsep : ∀ i j : Fin k, j < i → ¬ siteNear9 P n (a i).1 (a j).1)
+    (i : Fin k) (hq : (Sum.inl (I.center (a i).1) : I.ID ⊕ OddSites9 n) ∈
+      targetAnchorVars9 a) :
+    targetAnchorEquiv9 (I := I) a hsep i =
+      ⟨Sum.inl (I.center (a i).1), hq⟩ := by
+  apply Subtype.ext
+  rfl
+
+private noncomputable def targetAssignmentEquiv9 {P : Params9} {n k N : ℕ}
+    {I : IDMap9 P n} (a : Fin k → EvenSites9 n)
+    (hsep : ∀ i j : Fin k, j < i → ¬ siteNear9 P n (a i).1 (a j).1) :
+    (∀ q : targetAnchorVars9 (I := I) a, Val9 I N q.1) ≃ (Fin k → Fin N) := by
+  classical
+  let e : Fin k ≃ targetAnchorVars9 (I := I) a := targetAnchorEquiv9 (I := I) a hsep
+  exact (Equiv.piCongrLeft (fun q : targetAnchorVars9 (I := I) a => Val9 I N q.1) e).symm.trans
+    (Equiv.piCongrRight fun _ => Equiv.refl (Fin N))
+
+private theorem targetAssignmentEquiv9_apply {P : Params9} {n k N : ℕ}
+    {I : IDMap9 P n} (a : Fin k → EvenSites9 n)
+    (hsep : ∀ i j : Fin k, j < i → ¬ siteNear9 P n (a i).1 (a j).1)
+    (s : ∀ q : targetAnchorVars9 a, Val9 I N q.1) (i : Fin k) :
+    targetAssignmentEquiv9 a hsep s i = s (targetAnchorEquiv9 a hsep i) := by
+  simp [targetAssignmentEquiv9, Equiv.piCongrRight, Equiv.piCongrLeft,
+    Equiv.piCongrLeft']
+  rfl
+
+private theorem targetAssignmentEquiv9_center {P : Params9} {n k N : ℕ}
+    {I : IDMap9 P n} (a : Fin k → EvenSites9 n)
+    (hsep : ∀ i j : Fin k, j < i → ¬ siteNear9 P n (a i).1 (a j).1)
+    (s : ∀ q : targetAnchorVars9 (I := I) a, Val9 I N q.1) (i : Fin k)
+    (hq : (Sum.inl (I.center (a i).1) : I.ID ⊕ OddSites9 n) ∈ targetAnchorVars9 a) :
+    targetAssignmentEquiv9 a hsep s i =
+      s ⟨Sum.inl (I.center (a i).1), hq⟩ := by
+  rw [targetAssignmentEquiv9_apply (I := I) a hsep s i]
+  have heq : targetAnchorEquiv9 (I := I) a hsep i =
+      ⟨Sum.inl (I.center (a i).1), hq⟩ := by
+    apply Subtype.ext
+    rfl
+  change (s (targetAnchorEquiv9 (I := I) a hsep i) : Fin N) =
+    (s ⟨Sum.inl (I.center (a i).1), hq⟩ : Fin N)
+  cases heq
+  rfl
+
+private theorem targetAnchor_badCount9 {P : Params9} {n k N : ℕ} {M : TagMix N}
+    {I : IDMap9 P n} (S : Setup9 P n N M) (E : Fin N → Fin N → Prop) (G : Colour)
+    (a : Fin k → EvenSites9 n) (hn : 0 < n)
+    (hscope : StarScopeFacts9 S I E G) :
+    (Finset.univ.filter fun v : EvenSites9 n =>
+      ¬ Disjoint (starScope9 I v) (targetAnchorVars9 a)).card ≤
+        k * (lllDegree9 P n + 1) := by
+  classical
+  let D : Fin k → Finset (EvenSites9 n) := fun i =>
+    insert (a i) (Finset.univ.filter fun v' : EvenSites9 n =>
+      v' ≠ a i ∧ ¬ Disjoint (starScope9 I (a i)) (starScope9 I v'))
+  let T : Finset (EvenSites9 n) := Finset.univ.filter fun v =>
+      ¬ Disjoint (starScope9 I v) (targetAnchorVars9 a)
+  have hsubset : T ⊆ Finset.univ.biUnion D := by
+    intro v hv
+    have hnot : ¬ Disjoint (starScope9 I v) (targetAnchorVars9 a) :=
+      (Finset.mem_filter.mp hv).2
+    rcases Finset.not_disjoint_iff.mp hnot with ⟨q, hqv, hqU⟩
+    rcases Finset.mem_image.mp hqU with ⟨i, hi, hqi⟩
+    have hqiScope : Sum.inl (I.center (a i).1) ∈ starScope9 I v := by
+      rw [hqi]
+      exact hqv
+    have hcenterScope : Sum.inl (I.center (a i).1) ∈ starScope9 I (a i) :=
+      center_mem_starScope9 (a i) hn
+    have hvD : v ∈ D i := by
+      by_cases hsame : v = a i
+      · simp [D, hsame]
+      · have hnot' : ¬ Disjoint (starScope9 I (a i)) (starScope9 I v) :=
+          Finset.not_disjoint_iff.mpr ⟨Sum.inl (I.center (a i).1), hcenterScope, hqiScope⟩
+        simp [D, hsame, hnot']
+    exact Finset.mem_biUnion.mpr ⟨i, Finset.mem_univ _, hvD⟩
+  have hcardD (i : Fin k) : (D i).card ≤ lllDegree9 P n + 1 := by
+    have hdegree := hscope.2 (a i)
+    have hnot : (a i) ∉ Finset.univ.filter (fun v' : EvenSites9 n =>
+        v' ≠ a i ∧ ¬ Disjoint (starScope9 I (a i)) (starScope9 I v')) := by
+      simp
+    change (insert (a i) (Finset.univ.filter (fun v' : EvenSites9 n =>
+      v' ≠ a i ∧ ¬ Disjoint (starScope9 I (a i)) (starScope9 I v')))).card ≤
+        lllDegree9 P n + 1
+    rw [Finset.card_insert_of_notMem hnot]
+    exact Nat.add_le_add_right hdegree 1
+  calc
+    T.card ≤ (Finset.univ.biUnion D).card := Finset.card_le_card hsubset
+    _ ≤ ∑ i : Fin k, (D i).card := by
+      simpa using (Finset.card_biUnion_le (s := Finset.univ) (t := D))
+    _ ≤ ∑ i : Fin k, (lllDegree9 P n + 1) :=
+      Finset.sum_le_sum fun i hi => hcardD i
+    _ = k * (lllDegree9 P n + 1) := by simp
+
+set_option maxHeartbeats 1000000 in
+private theorem tail_degree_small9 (P : Params9) (hP : P.Valid) (c : ℝ) (hc : 0 < c) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀,
+      P.tail c n * ((lllDegree9 P n : ℝ) + 1) ≤ 1 / 4 := by
+  classical
+  have hexps : ScaleExps9 P := scaleExps9_of_valid9 P hP
+  rcases hexps with ⟨heps, hepsσ, hu, hσu, _⟩
+  let σ : ℝ := P.σ
+  let gap : ℝ := P.u - σ
+  have hσpos : 0 < σ := by dsimp [σ]; linarith [heps, hepsσ]
+  have hσle : 0 ≤ σ := hσpos.le
+  have hgap : 0 < gap := by dsimp [gap, σ]; linarith
+  have huOne : P.u < 1 := by
+    have hxSxd : P.xS < P.xD := hP.1.2.1
+    have hxd : P.xD < 1 / 10 := hP.1.2.2
+    have hxSReal : (P.xS : ℝ) < 1 / 10 := by
+      have hxSxdR : (P.xS : ℝ) < (P.xD : ℝ) := by exact_mod_cast hxSxd
+      have hxdR : (P.xD : ℝ) < (1 / 10 : ℝ) := by
+        simpa using (Rat.cast_lt (K := ℝ)).2 hxd
+      linarith
+    simp [Params9.u]
+    linarith
+  let C : ℝ := c / 100
+  have hC : 0 < C := by dsimp [C]; positivity
+  have hlogLittle := isLittleO_log_rpow_atTop hgap
+  have hlogEvent : ∀ᶠ x : ℝ in Filter.atTop,
+      ‖Real.log x‖ ≤ C * ‖x ^ gap‖ :=
+    (Asymptotics.isLittleO_iff.mp hlogLittle) hC
+  have hlogNat : ∀ᶠ m : ℕ in Filter.atTop,
+      ‖Real.log (m : ℝ)‖ ≤ C * ‖(m : ℝ) ^ gap‖ :=
+    tendsto_natCast_atTop_atTop.eventually hlogEvent
+  rcases Filter.eventually_atTop.1 hlogNat with ⟨n₁, hn₁⟩
+  have hlog2 : 0 < Real.log 2 := Real.log_pos (by norm_num)
+  have hlog4 : 0 < Real.log 4 := Real.log_pos (by norm_num)
+  let Q : ℝ := max (10 * Real.log 2 / c) (2 * Real.log 4 / c)
+  have hQ : 0 < Q := by
+    dsimp [Q]
+    exact lt_of_lt_of_le (div_pos (mul_pos (by norm_num) hlog2) hc)
+      (le_max_left _ _)
+  have hrpow := (tendsto_rpow_atTop hu).comp tendsto_natCast_atTop_atTop
+  have hpowEvent : ∀ᶠ n : ℕ in Filter.atTop, Q ≤ (n : ℝ) ^ P.u :=
+    hrpow.eventually (Filter.eventually_atTop.2 ⟨Q, fun _ h => h⟩)
+  rcases Filter.eventually_atTop.1 hpowEvent with ⟨n₂, hn₂⟩
+  refine ⟨max n₁ (max n₂ 1), ?_⟩
+  intro n hn
+  have hn₁' : n₁ ≤ n := le_trans (le_max_left _ _) hn
+  have hinner : max n₂ 1 ≤ n := le_trans (le_max_right _ _) hn
+  have hn2 : n₂ ≤ n := le_trans (le_max_left _ _) hinner
+  have hnOne : 1 ≤ n := le_trans (le_max_right _ _) hinner
+  have hncast : 1 ≤ (n : ℝ) := by exact_mod_cast hnOne
+  have hpower : Q ≤ (n : ℝ) ^ P.u := hn₂ n hn2
+  have hlogNat' := hn₁ (n + 1) (by omega)
+  have hlognonneg : 0 ≤ Real.log ((n : ℝ) + 1) :=
+    Real.log_nonneg (by nlinarith [hncast])
+  have hpowgapNonneg : 0 ≤ ((n : ℝ) + 1) ^ gap := by positivity
+  have hlog : Real.log ((n : ℝ) + 1) ≤ C * ((n : ℝ) + 1) ^ gap := by
+    have hlog' : ‖Real.log ((n : ℝ) + 1)‖ ≤ C * ‖((n : ℝ) + 1) ^ gap‖ := by
+      simpa using hlogNat'
+    simpa [Real.norm_eq_abs, abs_of_nonneg hlognonneg, abs_of_nonneg hpowgapNonneg] using hlog'
+  have hradius : (P.radius n : ℝ) ≤ (n : ℝ) ^ σ := by
+    dsimp [Params9.radius]
+    exact Nat.floor_le (by positivity)
+  have hnplus : (n : ℝ) + 1 ≤ 2 * (n : ℝ) := by nlinarith [hncast]
+  have hradius' : (P.radius n : ℝ) ≤ ((n : ℝ) + 1) ^ σ :=
+    hradius.trans (Real.rpow_le_rpow (by positivity) (by linarith) hσle)
+  have hpowσOne : 1 ≤ ((n : ℝ) + 1) ^ σ :=
+    Real.one_le_rpow (by linarith) hσle
+  have hcoeff : 2 * (P.radius n : ℝ) + 8 ≤ 10 * ((n : ℝ) + 1) ^ σ := by
+    nlinarith [hradius', hpowσOne]
+  have hterm : (2 * (P.radius n : ℝ) + 8) * Real.log ((n : ℝ) + 1) ≤
+      (c / 5) * (n : ℝ) ^ P.u := by
+    have hmul := mul_le_mul hcoeff hlog hlognonneg (by positivity)
+    calc
+      (2 * (P.radius n : ℝ) + 8) * Real.log ((n : ℝ) + 1) ≤
+          (10 * ((n : ℝ) + 1) ^ σ) * (C * ((n : ℝ) + 1) ^ gap) := hmul
+      _ = 10 * C * (((n : ℝ) + 1) ^ σ * ((n : ℝ) + 1) ^ gap) := by ring
+      _ = 10 * C * ((n : ℝ) + 1) ^ (σ + gap) := by
+        rw [← Real.rpow_add (by positivity)]
+      _ = 10 * C * ((n : ℝ) + 1) ^ P.u := by simp [gap, σ]
+        _ ≤ (20 * C) * (n : ℝ) ^ P.u := by
+        have hpn := Real.rpow_le_rpow (by positivity) hnplus (le_of_lt hu)
+        calc
+          10 * C * ((n : ℝ) + 1) ^ P.u ≤ 10 * C * (2 * (n : ℝ)) ^ P.u :=
+            mul_le_mul_of_nonneg_left hpn (by positivity)
+          _ = 10 * C * ((2 : ℝ) ^ P.u * (n : ℝ) ^ P.u) := by
+            rw [Real.mul_rpow (by norm_num) (by positivity)]
+          _ ≤ (20 * C) * (n : ℝ) ^ P.u := by
+            have htwo : (2 : ℝ) ^ P.u ≤ 2 := by
+              calc
+                (2 : ℝ) ^ P.u ≤ (2 : ℝ) ^ (1 : ℝ) :=
+                  Real.rpow_le_rpow_of_exponent_le (by norm_num) huOne.le
+                _ = 2 := by norm_num
+            have hpowMul : (2 : ℝ) ^ P.u * (n : ℝ) ^ P.u ≤
+                2 * (n : ℝ) ^ P.u :=
+              mul_le_mul_of_nonneg_right htwo (by positivity)
+            calc
+              10 * C * ((2 : ℝ) ^ P.u * (n : ℝ) ^ P.u) ≤
+                  10 * C * (2 * (n : ℝ) ^ P.u) :=
+                    mul_le_mul_of_nonneg_left hpowMul (by positivity)
+              _ = (20 * C) * (n : ℝ) ^ P.u := by ring
+      _ = (c / 5) * (n : ℝ) ^ P.u := by ring
+  have hlogA : Real.log ((lllDegree9 P n : ℝ) + 1) ≤
+      (c / 2) * (n : ℝ) ^ P.u := by
+    have hdegreePos : 0 < lllDegree9 P n := by
+      unfold lllDegree9
+      positivity
+    have hdegreeOne : 1 ≤ lllDegree9 P n := by omega
+    have hApos : 0 < (lllDegree9 P n : ℝ) + 1 := by positivity
+    have hDOne : 1 ≤ (lllDegree9 P n : ℝ) := by exact_mod_cast hdegreeOne
+    have hA : (lllDegree9 P n : ℝ) + 1 ≤ 2 * (lllDegree9 P n : ℝ) := by nlinarith [hDOne]
+    have hlogD : Real.log (lllDegree9 P n : ℝ) =
+        ((2 * P.radius n + 8 : ℕ) : ℝ) * Real.log ((n : ℝ) + 1) := by
+      simp [lllDegree9, Real.log_pow]
+    calc
+      Real.log ((lllDegree9 P n : ℝ) + 1) ≤ Real.log (2 * (lllDegree9 P n : ℝ)) :=
+        Real.log_le_log hApos (by nlinarith)
+      _ = Real.log 2 + Real.log (lllDegree9 P n : ℝ) := by
+        rw [Real.log_mul (by norm_num) (by positivity)]
+      _ ≤ Real.log 2 + (c / 5) * (n : ℝ) ^ P.u := by
+        rw [hlogD]
+        push_cast
+        linarith [hterm]
+      _ ≤ (c / 10) * (n : ℝ) ^ P.u + (c / 5) * (n : ℝ) ^ P.u := by
+        have hlog2le : Real.log 2 ≤ (c / 10) * (n : ℝ) ^ P.u := by
+          have hqle : 10 * Real.log 2 / c ≤ (n : ℝ) ^ P.u :=
+            le_trans (le_max_left _ _) hpower
+          have hqle' : 10 * Real.log 2 ≤ c * (n : ℝ) ^ P.u :=
+            by simpa [mul_comm] using (div_le_iff₀ hc).1 hqle
+          nlinarith [hqle']
+        linarith [hlog2le]
+      _ ≤ (c / 2) * (n : ℝ) ^ P.u := by nlinarith
+  have hApos : 0 < (lllDegree9 P n : ℝ) + 1 := by positivity
+  have htailEq : P.tail c n * ((lllDegree9 P n : ℝ) + 1) =
+      Real.exp (-(c * (n : ℝ) ^ P.u) + Real.log ((lllDegree9 P n : ℝ) + 1)) := by
+    rw [Params9.tail]
+    calc
+      Real.exp (-(c * (n : ℝ) ^ P.u)) * ((lllDegree9 P n : ℝ) + 1) =
+          Real.exp (-(c * (n : ℝ) ^ P.u)) *
+            Real.exp (Real.log ((lllDegree9 P n : ℝ) + 1)) := by rw [Real.exp_log hApos]
+      _ = Real.exp (-(c * (n : ℝ) ^ P.u) + Real.log ((lllDegree9 P n : ℝ) + 1)) := by
+        rw [Real.exp_add]
+  have hlog4le : Real.log 4 ≤ (c / 2) * (n : ℝ) ^ P.u := by
+    have hqle : 2 * Real.log 4 / c ≤ (n : ℝ) ^ P.u :=
+      le_trans (le_max_right _ _) hpower
+    have hqle' : 2 * Real.log 4 ≤ c * (n : ℝ) ^ P.u :=
+      by simpa [mul_comm] using (div_le_iff₀ hc).1 hqle
+    nlinarith [hqle']
+  calc
+    P.tail c n * ((lllDegree9 P n : ℝ) + 1) =
+        Real.exp (-(c * (n : ℝ) ^ P.u) + Real.log ((lllDegree9 P n : ℝ) + 1)) := htailEq
+    _ ≤ Real.exp (-(c / 2) * (n : ℝ) ^ P.u) :=
+      Real.exp_le_exp.mpr (by nlinarith [hlogA])
+    _ ≤ Real.exp (-Real.log 4) := Real.exp_le_exp.mpr (by linarith [hlog4le])
+    _ = 1 / 4 := by
+      rw [Real.exp_neg, Real.exp_log (by norm_num : (0 : ℝ) < 4)]
+      norm_num
+
+private theorem condPenalty9 {x : ℝ} {d k t : ℕ}
+    (hx : 0 ≤ x) (hsmall : x * ((d + 1 : ℕ) : ℝ) ≤ 1 / 4)
+    (ht : t ≤ k * (d + 1)) :
+    ((1 - x) ^ t)⁻¹ ≤ (2 : ℝ) ^ k := by
+  have hdOne : 1 ≤ d + 1 := by omega
+  have hdOneR : 1 ≤ ((d + 1 : ℕ) : ℝ) := by exact_mod_cast hdOne
+  have hxquarter : x ≤ 1 / 4 := by nlinarith [hx, hdOneR, hsmall]
+  have hden : 0 < 1 - x := by linarith
+  have hinvPos : 0 < (1 - x)⁻¹ := inv_pos.mpr hden
+  have hlogInv : Real.log ((1 - x)⁻¹) ≤ 2 * x := by
+    have hlog := Real.log_le_sub_one_of_pos hinvPos
+    calc
+      Real.log ((1 - x)⁻¹) ≤ (1 - x)⁻¹ - 1 := hlog
+      _ = x / (1 - x) := by field_simp [ne_of_gt hden]; ring
+      _ ≤ 2 * x := by
+        apply (div_le_iff₀ hden).2
+        have hprod : 0 ≤ x * (1 - 2 * x) :=
+          mul_nonneg hx (by linarith [hxquarter])
+        nlinarith [hprod]
+  have hlogBase : -Real.log (1 - x) ≤ 2 * x := by
+    simpa [Real.log_inv] using hlogInv
+  have hTcast : (t : ℝ) ≤ ((k * (d + 1) : ℕ) : ℝ) := by exact_mod_cast ht
+  have hsmallCast : x * ((d + 1 : ℕ) : ℝ) ≤ 1 / 4 := hsmall
+  have hTx : (t : ℝ) * x ≤ (k : ℝ) / 4 := by
+    calc
+      (t : ℝ) * x ≤ ((k * (d + 1) : ℕ) : ℝ) * x :=
+        mul_le_mul_of_nonneg_right hTcast hx
+      _ = (k : ℝ) * (x * ((d + 1 : ℕ) : ℝ)) := by push_cast; ring
+      _ ≤ (k : ℝ) * (1 / 4) := mul_le_mul_of_nonneg_left hsmallCast (by positivity)
+      _ = (k : ℝ) / 4 := by ring
+  have hpowPos : 0 < (1 - x) ^ t := pow_pos hden t
+  have hfactor : ((1 - x) ^ t)⁻¹ =
+      Real.exp ((t : ℝ) * (-Real.log (1 - x))) := by
+    calc
+      ((1 - x) ^ t)⁻¹ = Real.exp (-Real.log ((1 - x) ^ t)) := by
+        rw [Real.exp_neg, Real.exp_log hpowPos]
+      _ = Real.exp ((t : ℝ) * (-Real.log (1 - x))) := by
+        rw [Real.log_pow]
+        congr 1
+        ring
+  have hExpBound : (t : ℝ) * (-Real.log (1 - x)) ≤ (k : ℝ) / 2 := by
+    calc
+      (t : ℝ) * (-Real.log (1 - x)) ≤ (t : ℝ) * (2 * x) :=
+        mul_le_mul_of_nonneg_left hlogBase (by positivity)
+      _ = 2 * ((t : ℝ) * x) := by ring
+      _ ≤ (k : ℝ) / 2 := by nlinarith [hTx]
+  have hlog2lower : (1 / 2 : ℝ) ≤ Real.log 2 := by
+    have hhalf : (1 / 2 : ℝ) = (2 : ℝ)⁻¹ := by norm_num
+    have hlog := Real.log_le_sub_one_of_pos (by norm_num : (0 : ℝ) < 1 / 2)
+    rw [hhalf, Real.log_inv] at hlog
+    linarith
+  have hkNonneg : 0 ≤ (k : ℝ) := by positivity
+  have hExp : (t : ℝ) * (-Real.log (1 - x)) ≤
+      (k : ℝ) * Real.log 2 := by
+    calc
+      (t : ℝ) * (-Real.log (1 - x)) ≤ (k : ℝ) / 2 := hExpBound
+      _ ≤ (k : ℝ) * Real.log 2 := by nlinarith [hlog2lower, hkNonneg]
+  have hpow : Real.exp ((k : ℝ) * Real.log 2) = (2 : ℝ) ^ k := by
+    have hlogpow : Real.log ((2 : ℝ) ^ k) = (k : ℝ) * Real.log 2 := by rw [Real.log_pow]
+    rw [← hlogpow, Real.exp_log (by positivity)]
+  calc
+    ((1 - x) ^ t)⁻¹ = Real.exp ((t : ℝ) * (-Real.log (1 - x))) := hfactor
+    _ ≤ Real.exp ((k : ℝ) * Real.log 2) := Real.exp_le_exp.mpr hExp
+    _ = (2 : ℝ) ^ k := hpow
+
+private theorem independentTargetStars9 {P : Params9} {n k N : ℕ} {M : TagMix N}
+    {I : IDMap9 P n} (S : Setup9 P n N M) (E : Fin N → Fin N → Prop) (G : Colour)
+    (a : Fin k → EvenSites9 n) (x : Fin N) (ω : Outcome9 I N)
+    (hcancel : StarCancel9 S I E G) :
+    ∑ f : Fin k → Fin N, ∏ i : Fin k,
+      (siteFirst9 S (a i).1).w (f i) *
+        evenStar9 S E G (updAnc9 ω (I.center (a i).1) (f i)) (a i) x ≤
+    ∏ i : Fin k, (N : ℝ) * (siteFirst9 S (a i).1).w x := by
+  classical
+  rw [← Fintype.prod_sum (κ := fun _ : Fin k => Fin N)
+    (f := fun i y => (siteFirst9 S (a i).1).w y *
+      evenStar9 S E G (updAnc9 ω (I.center (a i).1) y) (a i) x)]
+  apply Finset.prod_le_prod₀
+  · intro i hi
+    apply Finset.sum_nonneg
+    intro y hy
+    exact mul_nonneg ((siteFirst9 S (a i).1).nonneg y) (evenStar9_nonneg S E G
+      (updAnc9 ω (I.center (a i).1) y) (a i) x)
+  · intro i hi
+    exact hcancel ω (a i) x
+
+private theorem hitSet9_eq_of_anchorAgree {P : Params9} {n N : ℕ}
+    {I : IDMap9 P n} (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω ω' : Outcome9 I N) (ids : Finset I.ID)
+    (hanc : ∀ c ∈ ids, anc9 ω c = anc9 ω' c) :
+    hitSet9 E G ω ids = hitSet9 E G ω' ids := by
+  classical
+  ext y
+  simp only [hitSet9, Finset.mem_filter, Finset.mem_univ, true_and]
+  constructor
+  · intro hy d hd
+    have hval := hy d hd
+    rw [hanc d hd] at hval
+    exact hval
+  · intro hy d hd
+    have hval := hy d hd
+    rw [← hanc d hd] at hval
+    exact hval
+
+private theorem maskedLaw9_eq_of_maskAgree {P : Params9} {n N : ℕ} {M : TagMix N}
+    {I : IDMap9 P n} (S : Setup9 P n N M) (ω ω' : Outcome9 I N)
+    (b : OddSites9 n) (hmask : msk9 ω b = msk9 ω' b) :
+    maskedLaw9 S ω b = maskedLaw9 S ω' b := by
+  unfold maskedLaw9
+  rw [hmask]
+
+private theorem rowLaw9_eq_of_localAgree {P : Params9} {n N : ℕ} {M : TagMix N}
+    {I : IDMap9 P n} (S : Setup9 P n N M) (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω ω' : Outcome9 I N) (b : OddSites9 n)
+    (hanc : ∀ c ∈ I.seen b.1, anc9 ω c = anc9 ω' c)
+    (hmask : msk9 ω b = msk9 ω' b) : rowLaw9 S E G ω b = rowLaw9 S E G ω' b := by
+  unfold rowLaw9
+  rw [maskedLaw9_eq_of_maskAgree S ω ω' b hmask]
+  rw [hitSet9_eq_of_anchorAgree E G ω ω' (I.seen b.1) hanc]
+
+private theorem delLaw9_eq_of_localAgree {P : Params9} {n N : ℕ} {M : TagMix N}
+    {I : IDMap9 P n} (S : Setup9 P n N M) (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω ω' : Outcome9 I N) (b : OddSites9 n) (t : I.ID)
+    (hanc : ∀ c ∈ I.seen b.1, anc9 ω c = anc9 ω' c)
+    (hmask : msk9 ω b = msk9 ω' b) :
+    delLaw9 S E G ω b t = delLaw9 S E G ω' b t := by
+  unfold delLaw9
+  rw [maskedLaw9_eq_of_maskAgree S ω ω' b hmask]
+  apply congrArg (restrictOr9 (maskedLaw9 S ω' b))
+  apply hitSet9_eq_of_anchorAgree E G ω ω' ((I.seen b.1).erase t)
+  intro c hc
+  exact hanc c (Finset.mem_of_mem_erase hc)
+
+private theorem prefixLaw9_eq_of_orderAgree {P : Params9} {n N : ℕ}
+    {I : IDMap9 P n} (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω ω' : Outcome9 I N) (base base' : Law N) (order : List I.ID) (k : ℕ)
+    (hbase : base = base') (hanc : ∀ c ∈ order, anc9 ω c = anc9 ω' c) :
+    prefixLaw9 E G ω base order k = prefixLaw9 E G ω' base' order k := by
+  unfold prefixLaw9
+  rw [hbase]
+  congr 1
+  apply hitSet9_eq_of_anchorAgree E G ω ω' (order.take k).toFinset
+  intro c hc
+  apply hanc c
+  exact List.Sublist.subset (List.take_sublist k order) (List.mem_toFinset.mp hc)
+
+private theorem orderRegular9_eq_of_orderAgree {P : Params9} {n N : ℕ}
+    {I : IDMap9 P n} (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω ω' : Outcome9 I N) (base base' : Law N) (order : List I.ID)
+    (hbase : base = base') (hanc : ∀ c ∈ order, anc9 ω c = anc9 ω' c) :
+    orderRegular9 E G ω base order ↔ orderRegular9 E G ω' base' order := by
+  have hprefix (k : ℕ) :
+      prefixLaw9 E G ω base order k = prefixLaw9 E G ω' base' order k :=
+    prefixLaw9_eq_of_orderAgree E G ω ω' base base' order k hbase hanc
+  constructor
+  · intro h k d hk hprev
+    have hd : d ∈ order := List.mem_of_getElem? hk
+    have hprev' : ∀ j d', j < k → order[j]? = some d' →
+        (49 / 100 : ℝ) ≤ rowDeg E G (anc9 ω d') (prefixLaw9 E G ω base order j) := by
+      intro j d' hj hj'
+      have hd' : d' ∈ order := List.mem_of_getElem? hj'
+      simpa [hanc d' hd', hprefix j] using hprev j d' hj hj'
+    have hval := h k d hk hprev'
+    simpa [hanc d hd, hprefix k] using hval
+  · intro h k d hk hprev
+    have hd : d ∈ order := List.mem_of_getElem? hk
+    have hprev' : ∀ j d', j < k → order[j]? = some d' →
+        (49 / 100 : ℝ) ≤ rowDeg E G (anc9 ω' d') (prefixLaw9 E G ω' base' order j) := by
+      intro j d' hj hj'
+      have hd' : d' ∈ order := List.mem_of_getElem? hj'
+      simpa [hanc d' hd', hprefix j] using hprev j d' hj hj'
+    have hval := h k d hk hprev'
+    simpa [hanc d hd, hprefix k] using hval
+
+private theorem targetFrac9_eq_of_localAgree {P : Params9} {n N : ℕ} {M : TagMix N}
+    {I : IDMap9 P n} (S : Setup9 P n N M) (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω ω' : Outcome9 I N) (v : EvenSites9 n) (b : StarOdd9 v)
+    (hanc : ∀ c ∈ I.seen b.1.1, anc9 ω c = anc9 ω' c)
+    (hmask : msk9 ω b.1 = msk9 ω' b.1) :
+    targetFrac9 S E G ω v b.1 = targetFrac9 S E G ω' v b.1 := by
+  have hcenter := hanc (I.center v.1) (center_mem_seen9 b)
+  have hdel := delLaw9_eq_of_localAgree S E G ω ω' b.1 (I.center v.1) hanc hmask
+  unfold targetFrac9
+  rw [hcenter, hdel]
+
+private theorem starValid9_eq_of_localAgree {P : Params9} {n N : ℕ} {M : TagMix N}
+    {I : IDMap9 P n} (S : Setup9 P n N M) (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω ω' : Outcome9 I N) (v : EvenSites9 n)
+    (hanc : ∀ b : StarOdd9 v, ∀ c ∈ I.seen b.1.1, anc9 ω c = anc9 ω' c)
+    (hmask : ∀ b : StarOdd9 v, msk9 ω b.1 = msk9 ω' b.1) :
+    starValid9 S E G ω v = starValid9 S E G ω' v := by
+  have hreg : starRegular9 S E G ω v ↔ starRegular9 S E G ω' v := by
+    unfold starRegular9
+    constructor
+    · intro h b hb
+      let sb : StarOdd9 v := ⟨b, hb⟩
+      have horder : ∀ d ∈ fullOrder9 I v b, anc9 ω d = anc9 ω' d := by
+        intro d hd
+        exact hanc sb d (fullOrder9_mem_seen hb hd)
+      have hcore : ∀ d ∈ coreOrder9 I v b, anc9 ω d = anc9 ω' d := by
+        intro d hd
+        exact hanc sb d (coreOrder9_mem_seen hd)
+      rcases h b hb with ⟨h₁, h₂, h₃⟩
+      refine ⟨?_, ?_, ?_⟩
+      · exact (orderRegular9_eq_of_orderAgree E G ω ω'
+          (maskedLaw9 S ω b) (maskedLaw9 S ω' b) (fullOrder9 I v b)
+          (maskedLaw9_eq_of_maskAgree S ω ω' b (hmask sb)) horder).mp h₁
+      · exact (orderRegular9_eq_of_orderAgree E G ω ω'
+          (siteSecond9 S b.1) (siteSecond9 S b.1) (fullOrder9 I v b) rfl horder).mp h₂
+      · exact (orderRegular9_eq_of_orderAgree E G ω ω'
+          (siteSecond9 S b.1) (siteSecond9 S b.1) (coreOrder9 I v b) rfl hcore).mp h₃
+    · intro h b hb
+      let sb : StarOdd9 v := ⟨b, hb⟩
+      have horder : ∀ d ∈ fullOrder9 I v b, anc9 ω d = anc9 ω' d := by
+        intro d hd
+        exact hanc sb d (fullOrder9_mem_seen hb hd)
+      have hcore : ∀ d ∈ coreOrder9 I v b, anc9 ω d = anc9 ω' d := by
+        intro d hd
+        exact hanc sb d (coreOrder9_mem_seen hd)
+      rcases h b hb with ⟨h₁, h₂, h₃⟩
+      refine ⟨?_, ?_, ?_⟩
+      · exact (orderRegular9_eq_of_orderAgree E G ω ω'
+          (maskedLaw9 S ω b) (maskedLaw9 S ω' b) (fullOrder9 I v b)
+          (maskedLaw9_eq_of_maskAgree S ω ω' b (hmask sb)) horder).mpr h₁
+      · exact (orderRegular9_eq_of_orderAgree E G ω ω'
+          (siteSecond9 S b.1) (siteSecond9 S b.1) (fullOrder9 I v b) rfl horder).mpr h₂
+      · exact (orderRegular9_eq_of_orderAgree E G ω ω'
+          (siteSecond9 S b.1) (siteSecond9 S b.1) (coreOrder9 I v b) rfl hcore).mpr h₃
+  have hgain : starGain9 S E G ω v = starGain9 S E G ω' v := by
+    unfold starGain9
+    apply Finset.sum_congr rfl
+    intro b hb
+    exact congrArg Real.log (targetFrac9_eq_of_localAgree S E G ω ω' v b (hanc b) (hmask b))
+  unfold starValid9
+  exact propext (and_congr hreg (by rw [hgain]))
+
+private theorem starLik9_eq_of_localAgree {P : Params9} {n N : ℕ} {M : TagMix N}
+    {I : IDMap9 P n} (S : Setup9 P n N M) (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω ω' : Outcome9 I N) (v : EvenSites9 n) (y : Fin N)
+    (hanc : ∀ b : StarOdd9 v, ∀ d ∈ I.seen b.1.1, anc9 ω d = anc9 ω' d)
+    (hmask : ∀ b : StarOdd9 v, msk9 ω b.1 = msk9 ω' b.1)
+    (ys : StarOdd9 v → Fin N) :
+    starLik9 S E G ω v y ys = starLik9 S E G ω' v y ys := by
+  have hanc' : ∀ b : StarOdd9 v, ∀ d ∈ I.seen b.1.1,
+      anc9 (updAnc9 ω (I.center v.1) y) d =
+        anc9 (updAnc9 ω' (I.center v.1) y) d := by
+    intro b d hd
+    by_cases hdc : d = I.center v.1
+    · subst d
+      simp [anc9, updAnc9, Function.update]
+    · rw [anc9_update_ne ω (I.center v.1) d y hdc,
+        anc9_update_ne ω' (I.center v.1) d y hdc]
+      exact hanc b d hd
+  have hmask' : ∀ b : StarOdd9 v,
+      msk9 (updAnc9 ω (I.center v.1) y) b.1 =
+        msk9 (updAnc9 ω' (I.center v.1) y) b.1 := by
+    intro b
+    have h₁ : msk9 (updAnc9 ω (I.center v.1) y) b.1 = msk9 ω b.1 := by
+      unfold msk9 updAnc9
+      have hne : (Sum.inr b.1 : I.ID ⊕ OddSites9 n) ≠ Sum.inl (I.center v.1) := by simp
+      rw [Function.update_of_ne hne]
+    have h₂ : msk9 (updAnc9 ω' (I.center v.1) y) b.1 = msk9 ω' b.1 := by
+      unfold msk9 updAnc9
+      have hne : (Sum.inr b.1 : I.ID ⊕ OddSites9 n) ≠ Sum.inl (I.center v.1) := by simp
+      rw [Function.update_of_ne hne]
+    exact h₁.trans ((hmask b).trans h₂.symm)
+  have hvalid : starValid9 S E G (updAnc9 ω (I.center v.1) y) v =
+      starValid9 S E G (updAnc9 ω' (I.center v.1) y) v :=
+    starValid9_eq_of_localAgree S E G (updAnc9 ω (I.center v.1) y)
+      (updAnc9 ω' (I.center v.1) y) v hanc' hmask'
+  unfold starLik9
+  rw [hvalid]
+  congr 1
+  apply Finset.prod_congr rfl
+  intro b hb
+  exact congrArg (fun μ : Law N => μ.w (ys b))
+    (rowLaw9_eq_of_localAgree S E G (updAnc9 ω (I.center v.1) y)
+      (updAnc9 ω' (I.center v.1) y) b.1 (hanc' b) (hmask' b))
+
+private theorem starMarg9_eq_of_localAgree {P : Params9} {n N : ℕ} {M : TagMix N}
+    {I : IDMap9 P n} (S : Setup9 P n N M) (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω ω' : Outcome9 I N) (v : EvenSites9 n)
+    (hanc : ∀ b : StarOdd9 v, ∀ d ∈ I.seen b.1.1, anc9 ω d = anc9 ω' d)
+    (hmask : ∀ b : StarOdd9 v, msk9 ω b.1 = msk9 ω' b.1)
+    (ys : StarOdd9 v → Fin N) :
+    starMarg9 S E G ω v ys = starMarg9 S E G ω' v ys := by
+  unfold starMarg9
+  apply Finset.sum_congr rfl
+  intro y hy
+  exact congrArg (fun z : ℝ => (siteFirst9 S v.1).w y * z)
+    (starLik9_eq_of_localAgree S E G ω ω' v y hanc hmask ys)
+
+private theorem starRef9_eq_of_localAgree {P : Params9} {n N : ℕ} {M : TagMix N}
+    {I : IDMap9 P n} (S : Setup9 P n N M) (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω ω' : Outcome9 I N) (v : EvenSites9 n)
+    (hanc : ∀ b : StarOdd9 v, ∀ d ∈ I.seen b.1.1, anc9 ω d = anc9 ω' d)
+    (hmask : ∀ b : StarOdd9 v, msk9 ω b.1 = msk9 ω' b.1)
+    (ys : StarOdd9 v → Fin N) :
+    starRef9 S E G ω v ys = starRef9 S E G ω' v ys := by
+  unfold starRef9
+  apply Finset.prod_congr rfl
+  intro b hb
+  exact congrArg (fun μ : Law N => μ.w (ys b))
+    (delLaw9_eq_of_localAgree S E G ω ω' b.1 (I.center v.1) (hanc b) (hmask b))
+
+private theorem predFail9_eq_of_localAgree {P : Params9} {n N : ℕ} {M : TagMix N}
+    {I : IDMap9 P n} (S : Setup9 P n N M) (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω ω' : Outcome9 I N) (v : EvenSites9 n)
+    (hanc : ∀ b : StarOdd9 v, ∀ d ∈ I.seen b.1.1, anc9 ω d = anc9 ω' d)
+    (hmask : ∀ b : StarOdd9 v, msk9 ω b.1 = msk9 ω' b.1)
+    (ys : StarOdd9 v → Fin N) : predFail9 S E G ω v ys = predFail9 S E G ω' v ys := by
+  unfold predFail9
+  rw [starMarg9_eq_of_localAgree S E G ω ω' v hanc hmask ys,
+    starRef9_eq_of_localAgree S E G ω ω' v hanc hmask ys]
+
+private theorem evenRowAt9_eq_of_localAgree {P : Params9} {n N : ℕ} {M : TagMix N}
+    {I : IDMap9 P n} (S : Setup9 P n N M) (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω ω' : Outcome9 I N) (v : EvenSites9 n)
+    (hanc : ∀ b : StarOdd9 v, ∀ d ∈ I.seen b.1.1, anc9 ω d = anc9 ω' d)
+    (hmask : ∀ b : StarOdd9 v, msk9 ω b.1 = msk9 ω' b.1)
+    (ys : StarOdd9 v → Fin N) (y : Fin N) :
+    evenRowAt9 S E G ω v ys y = evenRowAt9 S E G ω' v ys y := by
+  unfold evenRowAt9
+  rw [starLik9_eq_of_localAgree S E G ω ω' v y hanc hmask ys,
+    starMarg9_eq_of_localAgree S E G ω ω' v hanc hmask ys]
+
+private theorem evenStar9_eq_of_localAgree {P : Params9} {n N : ℕ} {M : TagMix N}
+    {I : IDMap9 P n} (S : Setup9 P n N M) (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω ω' : Outcome9 I N) (v : EvenSites9 n) (x : Fin N)
+    (hcenter : anc9 ω (I.center v.1) = anc9 ω' (I.center v.1))
+    (hanc : ∀ b : StarOdd9 v, ∀ d ∈ I.seen b.1.1, anc9 ω d = anc9 ω' d)
+    (hmask : ∀ b : StarOdd9 v, msk9 ω b.1 = msk9 ω' b.1) :
+    evenStar9 S E G ω v x = evenStar9 S E G ω' v x := by
+  unfold evenStar9
+  apply Finset.sum_congr rfl
+  intro ys hys
+  rw [← hcenter]
+  rw [starLik9_eq_of_localAgree S E G ω ω' v (anc9 ω (I.center v.1)) hanc hmask ys]
+  rw [predFail9_eq_of_localAgree S E G ω ω' v hanc hmask ys]
+  rw [evenRowAt9_eq_of_localAgree S E G ω ω' v hanc hmask ys x]
+
+private theorem glueStarLocalAgree9 {P : Params9} {n k N : ℕ}
+    {I : IDMap9 P n} (a : Fin k → EvenSites9 n)
+    (hsep : ∀ i j : Fin k, j < i → ¬ siteNear9 P n (a i).1 (a j).1)
+    (ω : Outcome9 I N) (s : ∀ q : targetAnchorVars9 a, Val9 I N q.1) (i : Fin k) :
+    ∃ y : Fin N,
+      y = targetAssignmentEquiv9 (I := I) a hsep s i ∧
+      anc9 (S07.glue (targetAnchorVars9 a) ω s) (I.center (a i).1) =
+        anc9 (updAnc9 ω (I.center (a i).1) y) (I.center (a i).1) ∧
+      (∀ b : StarOdd9 (a i), ∀ c ∈ I.seen b.1.1,
+        anc9 (S07.glue (targetAnchorVars9 a) ω s) c =
+          anc9 (updAnc9 ω (I.center (a i).1) y) c) ∧
+      (∀ b : StarOdd9 (a i),
+        msk9 (S07.glue (targetAnchorVars9 a) ω s) b.1 =
+          msk9 (updAnc9 ω (I.center (a i).1) y) b.1) := by
+  classical
+  let e : Fin k ≃ targetAnchorVars9 (I := I) a := targetAnchorEquiv9 (I := I) a hsep
+  let y : Fin N := s (e i)
+  have hown : S07.glue (targetAnchorVars9 a) ω s (e i).1 = y := by
+    unfold S07.glue
+    rw [dif_pos (e i).2]
+  have hglueCenter : S07.glue (targetAnchorVars9 a) ω s
+      (Sum.inl (I.center (a i).1)) = y := by
+    change S07.glue (targetAnchorVars9 a) ω s (e i).1 = y
+    exact hown
+  have hcenterOwn :
+      anc9 (S07.glue (targetAnchorVars9 a) ω s) (I.center (a i).1) =
+        anc9 (updAnc9 ω (I.center (a i).1) y) (I.center (a i).1) := by
+    calc
+      anc9 (S07.glue (targetAnchorVars9 a) ω s) (I.center (a i).1) = y := by
+        simpa [anc9, Val9] using hglueCenter
+      _ = anc9 (updAnc9 ω (I.center (a i).1) y) (I.center (a i).1) := by
+        simp [anc9, updAnc9, Function.update]
+  refine ⟨y, (targetAssignmentEquiv9_apply (I := I) a hsep s i).symm, ?_, ?_, ?_⟩
+  · exact hcenterOwn
+  · intro b c hc
+    by_cases hq : (Sum.inl c : I.ID ⊕ OddSites9 n) ∈ targetAnchorVars9 a
+    · rcases Finset.mem_image.mp hq with ⟨j, hj, hqj⟩
+      have hcenter : I.center (a j).1 = c := Sum.inl.inj hqj
+      have hji : j = i := by
+        by_contra hne
+        have hne' : i ≠ j := by
+          intro h
+          apply hne
+          exact h.symm
+        have hnot := otherTarget9_not_seen (P := P) (n := n) (k := k)
+          (I := I) a hsep (i := i) (j := j) hne' b
+        have hseen : I.center (a j).1 ∈ I.seen b.1.1 := by simpa [hcenter] using hc
+        exact hnot hseen
+      have hc_eq : c = I.center (a i).1 := by simpa [hji] using hcenter.symm
+      rw [hc_eq]
+      exact hcenterOwn
+    · have hne : c ≠ I.center (a i).1 := by
+        intro heq
+        subst c
+        exact hq ((e i).2)
+      have hglue : S07.glue (targetAnchorVars9 a) ω s (Sum.inl c) = ω (Sum.inl c) := by
+        simp [S07.glue, hq, Val9]
+        rfl
+      calc
+        anc9 (S07.glue (targetAnchorVars9 a) ω s) c = anc9 ω c := by
+          simpa [anc9, Val9] using hglue
+        _ = anc9 (updAnc9 ω (I.center (a i).1) y) c := by
+          rw [anc9_update_ne ω (I.center (a i).1) c y hne]
+  · intro b
+    have hnot : (Sum.inr b.1 : I.ID ⊕ OddSites9 n) ∉ targetAnchorVars9 a := by
+      intro h
+      rcases Finset.mem_image.mp h with ⟨j, hj, heq⟩
+      cases heq
+    simp [msk9, S07.glue, hnot, updAnc9, Function.update, Val9]
+    rfl
+
+set_option maxHeartbeats 1000000 in
+private theorem targetAnchorFreeIntegralBound9 {P : Params9} {n k N : ℕ} {M : TagMix N}
+    {I : IDMap9 P n} (S : Setup9 P n N M) (E : Fin N → Fin N → Prop) (G : Colour)
+    (a : Fin k → EvenSites9 n)
+    (hsep : ∀ i j : Fin k, j < i → ¬ siteNear9 P n (a i).1 (a j).1)
+    (ω : Outcome9 I N) (x : Fin N) (hcancel : StarCancel9 S I E G) :
+    ∑ s : ∀ q : targetAnchorVars9 a, Val9 I N q.1,
+      (∏ q : targetAnchorVars9 a, (inputLaw9 S I q.1).w (s q)) *
+        ∏ i : Fin k, evenStar9 S E G (S07.glue (targetAnchorVars9 a) ω s) (a i) x ≤
+      ∏ i : Fin k, (N : ℝ) * (siteFirst9 S (a i).1).w x := by
+  classical
+  let e : Fin k ≃ targetAnchorVars9 (I := I) a := targetAnchorEquiv9 (I := I) a hsep
+  let assignmentEquiv : (∀ q : targetAnchorVars9 (I := I) a, Val9 I N q.1) ≃
+      (Fin k → Fin N) := targetAssignmentEquiv9 (I := I) (N := N) a hsep
+  let F : (∀ q : targetAnchorVars9 a, Val9 I N q.1) → ℝ := fun s =>
+    (∏ q : targetAnchorVars9 a, (inputLaw9 S I q.1).w (s q)) *
+      ∏ i : Fin k, evenStar9 S E G (S07.glue (targetAnchorVars9 a) ω s) (a i) x
+  let H : (Fin k → Fin N) → ℝ := fun f =>
+    ∏ i : Fin k,
+      (siteFirst9 S (a i).1).w (f i) *
+        evenStar9 S E G (updAnc9 ω (I.center (a i).1) (f i)) (a i) x
+  have hweight (s : ∀ q : targetAnchorVars9 a, Val9 I N q.1) :
+      (∏ q : targetAnchorVars9 a, (inputLaw9 S I q.1).w (s q)) =
+        ∏ i : Fin k, (siteFirst9 S (a i).1).w (assignmentEquiv s i) := by
+    let wU : targetAnchorVars9 a → ℝ := fun q => (inputLaw9 S I q.1).w (s q)
+    have hlabel (i : Fin k)
+        (hq : (Sum.inl (I.center (a i).1) : I.ID ⊕ OddSites9 n) ∈ targetAnchorVars9 a) :
+        assignmentEquiv s i = s ⟨Sum.inl (I.center (a i).1), hq⟩ := by
+      rcases glueStarLocalAgree9 a hsep ω s i with ⟨y, hvalue, hcenter, hanc, hmask⟩
+      have hown : anc9 (S07.glue (targetAnchorVars9 a) ω s) (I.center (a i).1) = y := by
+        calc
+          anc9 (S07.glue (targetAnchorVars9 a) ω s) (I.center (a i).1) =
+              anc9 (updAnc9 ω (I.center (a i).1) y) (I.center (a i).1) := hcenter
+          _ = y := by simp [anc9, updAnc9, Function.update]
+      have hglue : S07.glue (targetAnchorVars9 a) ω s
+          (Sum.inl (I.center (a i).1)) = s ⟨Sum.inl (I.center (a i).1), hq⟩ := by
+        unfold S07.glue
+        rw [dif_pos hq]
+      have hglue' :
+          (S07.glue (targetAnchorVars9 a) ω s
+            (Sum.inl (I.center (a i).1)) : Fin N) =
+          (s ⟨Sum.inl (I.center (a i).1), hq⟩ : Fin N) := by
+        simpa [Val9] using hglue
+      have hs : s ⟨Sum.inl (I.center (a i).1), hq⟩ = y := by
+        change (s ⟨Sum.inl (I.center (a i).1), hq⟩ : Fin N) = y
+        have hGlueAnc :
+            (S07.glue (targetAnchorVars9 a) ω s (Sum.inl (I.center (a i).1)) : Fin N) =
+              anc9 (S07.glue (targetAnchorVars9 a) ω s) (I.center (a i).1) := by
+          change (S07.glue (targetAnchorVars9 a) ω s
+            (Sum.inl (I.center (a i).1)) : Fin N) =
+              (S07.glue (targetAnchorVars9 a) ω s
+                (Sum.inl (I.center (a i).1)) : Fin N)
+          rfl
+        exact hglue'.symm.trans (hGlueAnc.trans hown)
+      exact hvalue.symm.trans hs.symm
+    have hweightCenter (i : Fin k)
+        (hq : (Sum.inl (I.center (a i).1) : I.ID ⊕ OddSites9 n) ∈ targetAnchorVars9 a) :
+        wU ⟨Sum.inl (I.center (a i).1), hq⟩ =
+          (siteFirst9 S (a i).1).w (s ⟨Sum.inl (I.center (a i).1), hq⟩) := by
+      dsimp [wU]
+      simp [inputLaw9, siteFirst9, IDMap9.center_slice, Val9]
+    calc
+      (∏ q : targetAnchorVars9 a, (inputLaw9 S I q.1).w (s q)) =
+          ∏ i : Fin k, wU (e i) := by
+            exact (Equiv.prod_comp e wU).symm
+      _ = ∏ i : Fin k, (siteFirst9 S (a i).1).w (assignmentEquiv s i) := by
+        apply Finset.prod_congr rfl
+        intro i hi
+        have hq : (Sum.inl (I.center (a i).1) : I.ID ⊕ OddSites9 n) ∈
+            targetAnchorVars9 a := by
+          unfold targetAnchorVars9
+          exact Finset.mem_image.mpr ⟨i, Finset.mem_univ _, rfl⟩
+        have heq := targetAnchorEquiv9_apply (I := I) a hsep i hq
+        calc
+          wU (e i) = wU ⟨Sum.inl (I.center (a i).1), hq⟩ := congrArg wU heq
+          _ = (siteFirst9 S (a i).1).w (s ⟨Sum.inl (I.center (a i).1), hq⟩) :=
+            hweightCenter i hq
+          _ = (siteFirst9 S (a i).1).w (assignmentEquiv s i) := by rw [← hlabel i hq]
+  have hstars (s : ∀ q : targetAnchorVars9 a, Val9 I N q.1) :
+      (∏ i : Fin k, evenStar9 S E G (S07.glue (targetAnchorVars9 a) ω s) (a i) x) =
+        ∏ i : Fin k, evenStar9 S E G
+          (updAnc9 ω (I.center (a i).1) (assignmentEquiv s i)) (a i) x := by
+    apply Finset.prod_congr rfl
+    intro i hi
+    rcases glueStarLocalAgree9 a hsep ω s i with ⟨y, hvalue, hcenter, hanc, hmask⟩
+    have hy : assignmentEquiv s i = y := hvalue.symm
+    rw [hy]
+    exact evenStar9_eq_of_localAgree S E G
+      (S07.glue (targetAnchorVars9 a) ω s)
+      (updAnc9 ω (I.center (a i).1) y) (a i) x hcenter hanc hmask
+  have hF (s : ∀ q : targetAnchorVars9 a, Val9 I N q.1) : F s = H (assignmentEquiv s) := by
+    have hweight' :
+        (∏ q ∈ (targetAnchorVars9 a).attach, (inputLaw9 S I q.1).w (s q)) =
+          ∏ i : Fin k, (siteFirst9 S (a i).1).w (assignmentEquiv s i) := by
+      simpa only [Finset.univ_eq_attach] using hweight s
+    dsimp [F, H]
+    rw [hweight', hstars s]
+    rw [← Finset.prod_mul_distrib]
+  have hsum :
+      (∑ s : ∀ q : targetAnchorVars9 a, Val9 I N q.1, F s) =
+        ∑ f : Fin k → Fin N, H f :=
+    Fintype.sum_equiv assignmentEquiv F H hF
+  calc
+    (∑ s : ∀ q : targetAnchorVars9 a, Val9 I N q.1,
+        (∏ q : targetAnchorVars9 a, (inputLaw9 S I q.1).w (s q)) *
+          ∏ i : Fin k, evenStar9 S E G (S07.glue (targetAnchorVars9 a) ω s) (a i) x) =
+        ∑ f : Fin k → Fin N, H f := by
+          rw [← hsum]
+    _ ≤ ∏ i : Fin k, (N : ℝ) * (siteFirst9 S (a i).1).w x :=
+      independentTargetStars9 S E G a x ω hcancel
+
+theorem p92_even_anchor_integral_core (P : Params9) (hP : P.Valid) (c : ℝ) (hc : 0 < c) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ {N : ℕ} {E : Fin N → Fin N → Prop} {M : TagMix N} {G : Colour}
+      (S : Setup9 P n N M) (I : IDMap9 P n),
+      S07.CondProductBound → AnchorLLL9 S I E G c → StarScopeFacts9 S I E G →
+        StarCancel9 S I E G → EvenAnchorIntegral9 S I E G := by
+  obtain ⟨n₀, htail⟩ := tail_degree_small9 P hP c hc
+  refine ⟨n₀, ?_⟩
+  intro n hn N E M G S I hCP hLLL hscope hcancel
+  change S07.LLLInput (inputLaw9 S I) (fun v ω => StarBad9 S E G ω v)
+      (starScope9 I) (P.tail c n) (lllDegree9 P n) at hLLL
+  change ∀ (x : Fin N) (k : ℕ), k ≤ n → ∀ a : Fin k → EvenSites9 n,
+    (∀ i j : Fin k, j < i → ¬ siteNear9 P n (a i).1 (a j).1) →
+    (anchorLaw9 S I E G).expect (fun ω => ∏ i, evenStar9 S E G ω (a i) x) ≤
+      2 ^ k * ∏ i, (N : ℝ) * (siteFirst9 S (a i).1).w x
+  intro x k hk a hsep
+  by_cases hk0 : k = 0
+  · subst k
+    simp [FinProb.expect_const]
+  · have hnPos : 0 < n := by
+      have hkPos : 0 < k := Nat.pos_of_ne_zero hk0
+      omega
+    let U : Finset (I.ID ⊕ OddSites9 n) := targetAnchorVars9 a
+    let Φ : Outcome9 I N → ℝ := fun ω => ∏ i : Fin k, evenStar9 S E G ω (a i) x
+    let B : ℝ := ∏ i : Fin k, (N : ℝ) * (siteFirst9 S (a i).1).w x
+    have hΦnonneg : ∀ ω, 0 ≤ Φ ω := by
+      intro ω
+      exact Finset.prod_nonneg fun i hi => evenStar9_nonneg S E G ω (a i) x
+    have hfree : ∀ ω,
+        ∑ s : ∀ q : U, Val9 I N q.1,
+          (∏ q : U, (inputLaw9 S I q.1).w (s q)) * Φ (S07.glue U ω s) ≤ B := by
+      intro ω
+      simpa [U, Φ, B] using targetAnchorFreeIntegralBound9 S E G a hsep ω x hcancel
+    have hbadCount :
+        (Finset.univ.filter fun v : EvenSites9 n =>
+          ¬ Disjoint (starScope9 I v) U).card ≤ k * (lllDegree9 P n + 1) := by
+      simpa [U] using targetAnchor_badCount9 S E G a hnPos hscope
+    let t := (Finset.univ.filter fun v : EvenSites9 n =>
+      ¬ Disjoint (starScope9 I v) U).card
+    have ht : t ≤ k * (lllDegree9 P n + 1) := by
+      exact hbadCount
+    have hsmall := htail n hn
+    have hsmall' : P.tail c n * ((lllDegree9 P n + 1 : ℕ) : ℝ) ≤ 1 / 4 := by
+      simpa [Nat.cast_add] using hsmall
+    have hpen := condPenalty9 hLLL.x_nonneg hsmall' ht
+    have hCPbound := hCP (inputLaw9 S I)
+      (fun v ω => StarBad9 S E G ω v) (starScope9 I) (P.tail c n) (lllDegree9 P n) hLLL
+    rcases hCPbound with ⟨havoid, hcond⟩
+    have hcondBound : (anchorLaw9 S I E G).expect Φ ≤
+        ((1 - P.tail c n) ^ t)⁻¹ * B := by
+      simpa [anchorLaw9, rawLaw9, U, Φ, t] using hcond U Φ hΦnonneg B hfree
+    have hBnonneg : 0 ≤ B := by
+      dsimp [B]
+      exact Finset.prod_nonneg fun i hi =>
+        mul_nonneg (Nat.cast_nonneg N) ((siteFirst9 S (a i).1).nonneg x)
+    calc
+      (anchorLaw9 S I E G).expect Φ ≤ ((1 - P.tail c n) ^ t)⁻¹ * B := hcondBound
+      _ ≤ (2 : ℝ) ^ k * B := mul_le_mul_of_nonneg_right hpen hBnonneg
+      _ = 2 ^ k * ∏ i : Fin k, (N : ℝ) * (siteFirst9 S (a i).1).w x := by rfl
+
 end HypercubeRamsey.Lane_q_s09_assign2

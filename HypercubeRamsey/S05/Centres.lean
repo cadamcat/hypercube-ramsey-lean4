@@ -1991,8 +1991,7 @@ theorem success_of_events : ∀ p : Params5 γ K' χ, ∃ n₀ : ℕ, ∀ n ≥ 
         (hnotbad t htS) (μ t) (hμsel t htS)).2
     have hdist (t t' : X.St.Site) (htS : t ∈ S) (htS' : t' ∈ S) :
         _root_.hammingDist (X.St.oneHot t) (X.St.oneHot t') ≤ 8 := by
-      simpa [HypercubeRamsey.hammingDist] using
-        X.St.even_distance b t t' htS htS' (neigh_even t htS) (neigh_even t' htS')
+      exact X.St.even_distance b t t' htS htS' (neigh_even t htS) (neigh_even t' htS')
     let heights := S.image heightAt
     have hheights_nonempty : heights.Nonempty := by
       rcases hSnon with ⟨t, htS⟩

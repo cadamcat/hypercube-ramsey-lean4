@@ -1,5 +1,6 @@
 import HypercubeRamsey.S10.ClusterExclusion_p_s10_1k
 import HypercubeRamsey.S10.Split_opus_s10_tagged_sol_s10_d56
+import HypercubeRamsey.S10.Split_opus_s10_d6
 import HypercubeRamsey.S10.Split_opus_s10_tagged_sol_s10_d8_locality
 import HypercubeRamsey.S10.Split_opus_s10_tagged_sol_s10_d7c
 import HypercubeRamsey.S10.Split_opus_s10_tagged_q_s10_d4
@@ -1794,6 +1795,7 @@ theorem d5_odd_mean_cap (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ : 0 < �
       oddMean M t σ y b ≤ Real.exp ((mS n δ : ℝ) / 10) := by
   sorry
 
+set_option maxHeartbeats 4000000 in
 /-- **d6** = P10.1h, the comparison (10.2) (10:191–222; ~500 lines; new
 argument per group: ratio `2 A(F_{-c})/A(F) (D(F)/D(F_{-c}))^{2-j}`, singleton groups,
 uniform averaging over lists containing `c`; product by
@@ -1805,7 +1807,594 @@ theorem d6_likelihood_comparison (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (h�
       2 ^ n ≤ N → ∀ h a c w ω,
       subLik M t h a c w ω ≤
         Real.exp ((Real.log 2 - (6 / 100 : ℝ) * aG n δ) * kT n δ * n) * refQ M t h a c ω := by
-  sorry
+  classical
+  have hδs : δ < 1 / 2000 := lt_of_lt_of_le hδsmall
+    (div_le_div_of_nonneg_right (min_le_right _ _) (by norm_num))
+  obtain ⟨n₀, hn₀⟩ := Filter.eventually_atTop.mp
+    (Lane_opus_s10_d6.d6_budget_eventually δ hδ hδs)
+  refine ⟨n₀, fun n hn N E X Y G M t hN h a c w ω => ?_⟩
+  obtain ⟨ha1, hk2, hhF, hmain⟩ := hn₀ n hn
+  -- abbreviations
+  set k : ℝ := (kT n δ : ℝ) with hkdef
+  set aa : ℝ := aG n δ with haadef
+  set m : ℕ := mS n δ with hmdef
+  set Cc : ℝ := ((m : ℝ) + ((n : ℝ) + 1) ^ 3) * (((hp n δ).H : ℝ) + 1) *
+    (2 * (n : ℝ) ^ 10) with hCcdef
+  let s : Site n δ → ℕ := fun q => ((starOf a).filter fun b => groupOf δ b = q).card
+  let good : Site n δ → Prop := fun q => q.1 = (evenSite δ a).1 ∧ 2 ≤ s q
+  let Φ : Site n δ → ℝ := fun q =>
+    if good q then 2 * Real.exp ((Real.log 2 - (8 / 100 : ℝ) * aa) * k * s q)
+    else 2 * Real.exp (2 * k)
+  let cnt : Site n δ → ℝ := fun q => (((lists h q).filter fun L => c ∈ L).card : ℝ)
+  have hΦ0 : ∀ q, 0 ≤ Φ q := by
+    intro q
+    simp only [Φ]
+    split_ifs <;> positivity
+  have hcnt0 : ∀ q, 0 ≤ cnt q := fun q => Nat.cast_nonneg _
+  -- nonnegativity of the reference
+  have hdel_nonneg : ∀ q L, 0 ≤ deletionRef M t h a q L c ω := by
+    intro q L
+    unfold deletionRef
+    apply Finset.sum_nonneg
+    intro j _
+    apply mul_nonneg
+    · apply div_nonneg (mul_nonneg ((maskedPrior M _ _).nonneg j) (sq_nonneg _))
+      exact Finset.sum_nonneg fun j _ => mul_nonneg ((maskedPrior M _ _).nonneg j) (sq_nonneg _)
+    · exact Finset.prod_nonneg fun b _ => (restrictOrSelf _ _).nonneg _
+  have hgroupRef_nonneg : ∀ q, 0 ≤ groupRef M t h a q c ω := by
+    intro q
+    unfold groupRef
+    exact mul_nonneg (inv_nonneg.mpr (Nat.cast_nonneg _))
+      (Finset.sum_nonneg fun L _ => hdel_nonneg q L)
+  have hrefQ_nonneg : 0 ≤ refQ M t h a c ω :=
+    Finset.prod_nonneg fun q _ => hgroupRef_nonneg q
+  unfold subLik
+  split_ifs with hgate
+  swap
+  · exact mul_nonneg (Real.exp_pos _).le hrefQ_nonneg
+  set h' := h.setTuple c w with hh'
+  obtain ⟨hcenter, _hpos, hvalid⟩ := hgate
+  have hmask : h'.mask = h.mask := by rw [hh']; rfl
+  have htup : ∀ c', c' ≠ c → h'.tup c' = h.tup c' := by
+    intro c' hc'
+    rw [hh']
+    exact Function.update_of_ne hc' _ _
+  have haa0 : 0 ≤ aa := by
+    rw [haadef]; unfold aG; positivity
+  have hk0 : 0 ≤ k := Nat.cast_nonneg _
+  have ha1' : aa ≤ 1 / 10 := ha1
+  have hak0 : 0 ≤ aa * k := mul_nonneg haa0 hk0
+  obtain ⟨loc, hloc, hcl⟩ := Option.map_eq_some_iff.mp hcenter
+  have hc1 : c.1 = (evenSite δ a).1 := by rw [← hcl]
+  have hcL : ∀ q ∈ incGroups (δ := δ) a, c ∈ realizedList M t h' q := by
+    intro q hq
+    have hmem := Lane_opus_s10_d6.evenVertex_mem_incident (mS_le n δ) a q hq
+    unfold realizedList
+    rw [Finset.mem_biUnion]
+    refine ⟨evenSite δ a, ?_, ?_⟩
+    · unfold incidentSites
+      exact Finset.mem_filter.mpr ⟨hmem.1, hmem.2⟩
+    · rw [hloc, ← hcl]
+      simp
+  -- lists have at most `T + m` members (10:57)
+  have hlist_card : ∀ q (L : Finset (ID n δ)), L ∈ lists h q → L.card ≤ TT n δ + m := by
+    intro q L hL
+    unfold lists at hL
+    rw [Finset.mem_filter] at hL
+    obtain ⟨_, hown, hfam, hext⟩ := hL
+    rw [← Finset.card_filter_add_card_filter_not (p := fun c : ID n δ => c.1 = q.1)]
+    have hextc : (L.filter fun c : ID n δ => ¬ c.1 = q.1).card ≤ m := by
+      have hsub : (L.filter fun c : ID n δ => ¬ c.1 = q.1) ⊆
+          (Finset.univ.filter fun z' : Slice n δ => _root_.hammingDist q.1 z' = 1).biUnion
+            fun z' => L.filter fun c : ID n δ => c.1 = z' := by
+        intro x hx
+        obtain ⟨hxL, hxq⟩ := Finset.mem_filter.mp hx
+        rw [Finset.mem_biUnion]
+        refine ⟨x.1, Finset.mem_filter.mpr ⟨Finset.mem_univ _, ?_⟩,
+          Finset.mem_filter.mpr ⟨hxL, rfl⟩⟩
+        rcases hfam x hxL with h1 | h1
+        · exact absurd h1 hxq
+        · rw [hammingDist_comm]; exact h1
+      calc
+        _ ≤ _ := Finset.card_le_card hsub
+        _ ≤ ∑ z' ∈ Finset.univ.filter (fun z' : Slice n δ => _root_.hammingDist q.1 z' = 1),
+            (L.filter fun c : ID n δ => c.1 = z').card := Finset.card_biUnion_le
+        _ = ∑ z' ∈ Finset.univ.filter (fun z' : Slice n δ => _root_.hammingDist q.1 z' = 1),
+            1 := by
+          apply Finset.sum_congr rfl
+          intro z' hz'
+          exact hext z' (by rw [hammingDist_comm]; exact (Finset.mem_filter.mp hz').2)
+        _ = (Finset.univ.filter fun z' : Slice n δ => _root_.hammingDist q.1 z' = 1).card := by
+          simp
+        _ ≤ m := Lane_opus_s10_d6.card_dist_one_le q.1
+    omega
+  -- positivity transfer for masked priors and clusters
+  have hρpos : ∀ i S j, 0 < (maskedPrior M i S).w j → 0 < M.lam i j := by
+    intro i S j hpos
+    by_contra hle
+    push_neg at hle
+    have h0 : M.lam i j = 0 := le_antisymm hle (M.lam_nonneg i j)
+    have : (maskedPrior M i S).w j = 0 := by
+      unfold maskedPrior
+      split_ifs
+      · simp [FinProb.cond, prior, h0]
+      · simp [prior, h0]
+    linarith
+  have hDpos : ∀ i S j y, 0 < (maskedCluster M i S j).w y → 0 < (M.D i j).w y := by
+    intro i S j y hpos
+    by_contra hle
+    push_neg at hle
+    have h0 : (M.D i j).w y = 0 := le_antisymm hle ((M.D i j).nonneg y)
+    have : (maskedCluster M i S j).w y = 0 := by
+      unfold maskedCluster restrictOrSelf
+      split_ifs <;> simp [Law.restrict, h0]
+    linarith
+  -- per-group comparison (10:202–216)
+  have hgroup : ∀ q ∈ incGroups (δ := δ) a,
+      (clusterLaw M t h' q).expect (fun cl =>
+        ∏ b ∈ (starOf a).filter (fun b => groupOf δ b = q), (labLaw M t h' b cl).w (ω b)) ≤
+        Φ q * cnt q * groupRef M t h a q c ω := by
+    intro q hq
+    have hvq := hvalid q hq
+    obtain ⟨_hcount, _hlegal, _hsel, hLlists, hLpass, hTpos⟩ := hvq
+    have hcLq := hcL q hq
+    set L := realizedList M t h' q with hLdef
+    set F := hitSet M t h' q with hFdef
+    set ρ := maskedPrior M (t q.1) (h'.mask q) with hρdef
+    set D := maskedCluster M (t q.1) (h'.mask q) with hDdef
+    set B := (starOf a).filter (fun b => groupOf δ b = q) with hBdef
+    set Fw : ID n δ → Finset (Fin N) := fun c'' => hitSetWithout M t h' q c'' with hFwdef
+    set AF := ∑ j, ρ.w j * lawMassOn (D j) F ^ 2 with hAFdef
+    set Aw : ID n δ → ℝ := fun c'' => ∑ j, ρ.w j * lawMassOn (D j) (Fw c'') ^ 2 with hAwdef
+    set kept := tiltKept M t h' q with hkeptdef
+    set T := ∑ j, tiltWeight M t h' q j with hTdef
+    have hLcard : L.card ≤ TT n δ + m := hlist_card q L hLlists
+    have hLpos : 1 ≤ L.card := Finset.card_pos.mpr ⟨c, hcLq⟩
+    have hFw_sub : ∀ c'', F ⊆ Fw c'' := by
+      intro c'' y hy
+      simp only [hFwdef, hitSetWithout, hFdef, hitSet, Finset.mem_filter, Finset.mem_univ,
+        true_and] at hy ⊢
+      intro c' hc' _ i
+      exact hy c' hc' i
+    -- the fixed-list test in terms of hit sets (10.1)
+    have hset1 : fixedListHitSet E G (fun b => h'.tup (L.equivFin.symm b).1) = F := by
+      ext y
+      simp only [fixedListHitSet, hFdef, hitSet, Finset.mem_filter, Finset.mem_univ, true_and]
+      constructor
+      · intro H c' hc' i
+        have := H (L.equivFin ⟨c', hc'⟩) i
+        simpa using this
+      · intro H b i
+        exact H _ (L.equivFin.symm b).2 i
+    have hset2 : ∀ c'' (hc'' : c'' ∈ L), fixedListHitSetWithout E G
+        (fun b => h'.tup (L.equivFin.symm b).1) (L.equivFin ⟨c'', hc''⟩) = Fw c'' := by
+      intro c'' hc''
+      ext y
+      simp only [fixedListHitSetWithout, hFwdef, hitSetWithout, Finset.mem_filter,
+        Finset.mem_univ, true_and]
+      constructor
+      · intro H c' hc' hne i
+        have hne' : L.equivFin ⟨c', hc'⟩ ≠ L.equivFin ⟨c'', hc''⟩ := by
+          intro heq
+          apply hne
+          exact congrArg Subtype.val (L.equivFin.injective heq)
+        have := H (L.equivFin ⟨c', hc'⟩) hne' i
+        simpa using this
+      · intro H b hb i
+        apply H _ (L.equivFin.symm b).2 _ i
+        intro heq
+        apply hb
+        rw [← Equiv.apply_symm_apply L.equivFin b]
+        congr 1
+        exact Subtype.ext heq
+    have hpass := hLpass
+    unfold listFails fixedListFailure at hpass
+    simp only [not_or, not_exists, not_and, not_lt] at hpass
+    obtain ⟨habs, hownT, hextT⟩ := hpass
+    simp only [hset1, squaredClusterMass] at habs hownT hextT
+    have hAF_lo : Real.exp (-2 * k * L.card) ≤ AF := habs
+    have hAF_pos : 0 < AF := lt_of_lt_of_le (Real.exp_pos _) hAF_lo
+    have hAw_ge : ∀ c'', AF ≤ Aw c'' := fun c'' =>
+      Lane_opus_s10_d6.sqMass_mono ρ D (hFw_sub c'')
+    have hlog4 : Real.log 4 = 2 * Real.log 2 := by
+      rw [show (4 : ℝ) = 2 ^ 2 by norm_num, Real.log_pow]; norm_num
+    have hlog2 : Real.log 2 < 7 / 10 := by have := Real.log_two_lt_d9; linarith
+    have hlog2' : 0 < Real.log 2 := Real.log_pos (by norm_num)
+    have hownblock : FixedListOwnBlock E G ρ D (M.μ (t q.1)) aa := by
+      intro j hj y y' hy hy'
+      exact M.codegree (t q.1) j (hρpos _ _ _ hj) y y' (hDpos _ _ _ _ hy) (hDpos _ _ _ _ hy')
+    have hAw_bounds : ∀ c'' ∈ L, Aw c'' ≤ Real.exp (2 * k) * AF ∧
+        (c''.1 = q.1 → Aw c'' ≤ Real.exp ((Real.log 4 - (2 / 5 : ℝ) * aa) * k) * AF) := by
+      intro c'' hc''
+      have hAwpos : 0 < Aw c'' := lt_of_lt_of_le hAF_pos (hAw_ge c'')
+      have hb := hset2 c'' hc''
+      have hsymm : L.equivFin.symm (L.equivFin ⟨c'', hc''⟩) = ⟨c'', hc''⟩ :=
+        Equiv.symm_apply_apply _ _
+      have hown_le : FixedListOwnBlock E G ρ D (M.μ (t c''.1)) aa →
+          Aw c'' ≤ Real.exp ((Real.log 4 - (2 / 5 : ℝ) * aa) * k) * AF := by
+        intro hob
+        have := hownT (L.equivFin ⟨c'', hc''⟩) (by rw [hsymm]; exact hob)
+        rw [hb, ← hkdef, ← haadef] at this
+        have h2 := Lane_opus_s10_d6.le_exp_neg_mul_of_ratio hAwpos this
+        convert h2 using 2
+        ring
+      refine ⟨?_, ?_⟩
+      · by_cases hob : FixedListOwnBlock E G ρ D (M.μ (t c''.1)) aa
+        · refine (hown_le hob).trans ?_
+          apply mul_le_mul_of_nonneg_right _ hAF_pos.le
+          apply Real.exp_le_exp.mpr
+          rw [hlog4]
+          nlinarith [mul_le_mul_of_nonneg_right hlog2.le hk0]
+        · have := hextT (L.equivFin ⟨c'', hc''⟩) (by rw [hsymm]; exact hob)
+          rw [hb, ← hkdef] at this
+          have h2 := Lane_opus_s10_d6.le_exp_neg_mul_of_ratio hAwpos this
+          convert h2 using 2
+          ring
+      · intro hown
+        apply hown_le
+        rw [hown]
+        exact hownblock
+    -- retained tilt mass `h_F ≥ 1/2` (10:136–142)
+    set thr : ID n δ → ℝ := fun c'' => if c''.1 = q.1 then
+      Real.exp ((-Real.log 2 + (8 / 100 : ℝ) * aa) * k) else Real.exp (-(6 / 5 : ℝ) * k)
+      with hthrdef
+    set e0 : ℝ := Real.exp (-(3 / 2 : ℝ) * k * L.card) with he0def
+    have hkept : ∀ j, j ∉ kept → lawMassOn (D j) F < e0 ∨
+        ∃ c'' ∈ L, lawMassOn (D j) F < thr c'' * lawMassOn (D j) (Fw c'') := by
+      intro j hj
+      by_contra hcon
+      push_neg at hcon
+      apply hj
+      simp only [hkeptdef, tiltKept, Finset.mem_filter, Finset.mem_univ, true_and]
+      exact ⟨hcon.1, fun c'' hc'' => hcon.2 c'' hc''⟩
+    have hTeq : T = ∑ j, (if j ∈ kept then ρ.w j * lawMassOn (D j) F ^ 2 else 0) := rfl
+    have huntilted : AF ≤ T + (e0 ^ 2 + ∑ c'' ∈ L, thr c'' ^ 2 * Aw c'') :=
+      Lane_opus_s10_d6.untilted_mass_le ρ D F Fw L thr e0 kept hkept
+    have he0 : e0 ^ 2 ≤ Real.exp (-k) * AF := by
+      have hL1 : (1 : ℝ) ≤ L.card := by exact_mod_cast hLpos
+      rw [he0def, sq, ← Real.exp_add]
+      calc
+        Real.exp (-(3 / 2 : ℝ) * k * L.card + -(3 / 2 : ℝ) * k * L.card) ≤
+            Real.exp (-k + -2 * k * L.card) := Real.exp_le_exp.mpr
+              (by linarith [mul_le_mul_of_nonneg_left hL1 hk0])
+        _ = Real.exp (-k) * Real.exp (-2 * k * L.card) := Real.exp_add _ _
+        _ ≤ Real.exp (-k) * AF := mul_le_mul_of_nonneg_left hAF_lo (Real.exp_pos _).le
+    have hthrAw : ∀ c'' ∈ L, thr c'' ^ 2 * Aw c'' ≤
+        Real.exp (-(24 / 100 : ℝ) * aa * k) * AF := by
+      intro c'' hc''
+      by_cases hown : c''.1 = q.1
+      · simp only [hthrdef, if_pos hown]
+        rw [sq, ← Real.exp_add]
+        calc
+          Real.exp ((-Real.log 2 + (8 / 100 : ℝ) * aa) * k +
+              (-Real.log 2 + (8 / 100 : ℝ) * aa) * k) * Aw c'' ≤
+              Real.exp ((-Real.log 2 + (8 / 100 : ℝ) * aa) * k +
+                (-Real.log 2 + (8 / 100 : ℝ) * aa) * k) *
+                (Real.exp ((Real.log 4 - (2 / 5 : ℝ) * aa) * k) * AF) :=
+            mul_le_mul_of_nonneg_left ((hAw_bounds c'' hc'').2 hown) (Real.exp_pos _).le
+          _ = Real.exp ((-Real.log 2 + (8 / 100 : ℝ) * aa) * k +
+                (-Real.log 2 + (8 / 100 : ℝ) * aa) * k +
+                (Real.log 4 - (2 / 5 : ℝ) * aa) * k) * AF := by
+            rw [Real.exp_add (_ + _)]; ring
+          _ = Real.exp (-(24 / 100 : ℝ) * aa * k) * AF := by
+            congr 2; rw [hlog4]; ring
+      · simp only [hthrdef, if_neg hown]
+        rw [sq, ← Real.exp_add]
+        calc
+          Real.exp (-(6 / 5 : ℝ) * k + -(6 / 5 : ℝ) * k) * Aw c'' ≤
+              Real.exp (-(6 / 5 : ℝ) * k + -(6 / 5 : ℝ) * k) * (Real.exp (2 * k) * AF) :=
+            mul_le_mul_of_nonneg_left (hAw_bounds c'' hc'').1 (Real.exp_pos _).le
+          _ = Real.exp (-(6 / 5 : ℝ) * k + -(6 / 5 : ℝ) * k + 2 * k) * AF := by
+            rw [Real.exp_add (_ + _)]; ring
+          _ ≤ Real.exp (-(24 / 100 : ℝ) * aa * k) * AF :=
+            mul_le_mul_of_nonneg_right (Real.exp_le_exp.mpr
+              (by linarith [mul_le_mul_of_nonneg_right ha1' hk0])) hAF_pos.le
+    have hsumL : ∑ c'' ∈ L, thr c'' ^ 2 * Aw c'' ≤
+        (L.card : ℝ) * (Real.exp (-(24 / 100 : ℝ) * aa * k) * AF) := by
+      calc
+        ∑ c'' ∈ L, thr c'' ^ 2 * Aw c'' ≤
+            ∑ c'' ∈ L, Real.exp (-(24 / 100 : ℝ) * aa * k) * AF := Finset.sum_le_sum hthrAw
+        _ = _ := by rw [Finset.sum_const, nsmul_eq_mul]
+    have hhF' : Real.exp (-k) + ((TT n δ : ℝ) + (m : ℝ)) *
+        Real.exp (-(24 / 100 : ℝ) * aa * k) ≤ 1 / 2 := hhF
+    have hL' : (L.card : ℝ) ≤ (TT n δ : ℝ) + m := by exact_mod_cast hLcard
+    have hE0 : 0 ≤ Real.exp (-(24 / 100 : ℝ) * aa * k) * AF :=
+      mul_nonneg (Real.exp_pos _).le hAF_pos.le
+    have hLE := mul_le_mul_of_nonneg_right hL' hE0
+    have hhF2 := mul_le_mul_of_nonneg_right hhF' hAF_pos.le
+    have hAF2 : AF ≤ 2 * T := by linarith
+    -- the per-group constants
+    have hFm_eq : Fw c = Finset.univ.filter fun y =>
+        ∀ c' ∈ L, c' ≠ c → ∀ i, Hits E G (h.tup c' i) y := by
+      ext y
+      simp only [hFwdef, hitSetWithout, Finset.mem_filter, Finset.mem_univ, true_and]
+      constructor
+      · intro H c' hc' hne i
+        rw [← htup c' hne]
+        exact H c' hc' hne i
+      · intro H c' hc' hne i
+        rw [htup c' hne]
+        exact H c' hc' hne i
+    set Fm : Finset (Fin N) := Finset.univ.filter fun y =>
+        ∀ c' ∈ L, c' ≠ c → ∀ i, Hits E G (h.tup c' i) y with hFmdef
+    have hFsub : F ⊆ Fm := hFm_eq ▸ hFw_sub c
+    let R : ℝ := if good q then Real.exp ((Real.log 4 - (2 / 5 : ℝ) * aa) * k)
+      else Real.exp (2 * k)
+    let thrown : ℝ := Real.exp ((-Real.log 2 + (8 / 100 : ℝ) * aa) * k)
+    let X : ℝ := if good q then (1 / thrown) ^ (s q - 2) else 1
+    have hR : (∑ j, ρ.w j * lawMassOn (D j) Fm ^ 2) ≤ (2 * R) * T := by
+      have hAwc : Aw c = ∑ j, ρ.w j * lawMassOn (D j) Fm ^ 2 := by
+        simp only [hAwdef, hFm_eq]
+      rw [← hAwc]
+      have hRAF : Aw c ≤ R * AF := by
+        by_cases hg : good q
+        · simp only [R, if_pos hg]
+          exact (hAw_bounds c hcLq).2 (hc1.trans hg.1.symm)
+        · simp only [R, if_neg hg]
+          exact (hAw_bounds c hcLq).1
+      have hR0 : 0 ≤ R := by simp only [R]; split_ifs <;> positivity
+      calc
+        Aw c ≤ R * AF := hRAF
+        _ ≤ R * (2 * T) := mul_le_mul_of_nonneg_left hAF2 hR0
+        _ = 2 * R * T := by ring
+    have hX0 : 0 ≤ X := by simp only [X]; split_ifs <;> positivity
+    have hkept_mem : ∀ j ∈ kept, e0 ≤ lawMassOn (D j) F ∧
+        ∀ c'' ∈ L, thr c'' * lawMassOn (D j) (Fw c'') ≤ lawMassOn (D j) F := by
+      intro j hj
+      simp only [hkeptdef, tiltKept, Finset.mem_filter, Finset.mem_univ, true_and] at hj
+      exact ⟨hj.1, fun c'' hc'' => hj.2 c'' hc''⟩
+    have hposj : ∀ j ∈ kept, 0 < lawMassOn (D j) F := fun j hj =>
+      lt_of_lt_of_le (Real.exp_pos _) (hkept_mem j hj).1
+    have hX : ∀ j ∈ kept, (lawMassOn (D j) F / lawMassOn (D j) Fm) ^ 2 *
+        (lawMassOn (D j) Fm / lawMassOn (D j) F) ^ B.card ≤ X := by
+      intro j hj
+      have hu := hposj j hj
+      have huv : lawMassOn (D j) F ≤ lawMassOn (D j) Fm :=
+        Lane_opus_s10_d6.lawMassOn_mono _ hFsub
+      by_cases hg : good q
+      · simp only [X, if_pos hg]
+        have hgate := (hkept_mem j hj).2 c hcLq
+        have hown : c.1 = q.1 := hc1.trans hg.1.symm
+        simp only [hthrdef, if_pos hown] at hgate
+        rw [hFm_eq] at hgate
+        exact Lane_opus_s10_d6.ratio_le_thr hu (Real.exp_pos _) huv hgate hg.2
+      · simp only [X, if_neg hg]
+        have hB : B.card ≤ 2 := by
+          by_cases hq1 : q.1 = (evenSite δ a).1
+          · have : ¬ 2 ≤ B.card := fun h2 => hg ⟨hq1, h2⟩
+            omega
+          · have := Lane_opus_s10_d6.star_filter_card_le_one_of_special (mS_le n δ) a q hq1
+            exact le_trans this (by norm_num)
+        exact Lane_opus_s10_d6.ratio_le_one_of_le_two hu huv hB
+    have hΦ : 2 * R * X ≤ Φ q := by
+      by_cases hg : good q
+      · simp only [Φ, R, X, thrown, if_pos hg]
+        have hs2 : 2 ≤ s q := hg.2
+        rw [one_div, ← Real.exp_neg, ← Real.exp_nat_mul, mul_assoc, ← Real.exp_add]
+        apply mul_le_mul_of_nonneg_left _ (by norm_num)
+        apply Real.exp_le_exp.mpr
+        have hcast : ((s q - 2 : ℕ) : ℝ) = (s q : ℝ) - 2 := by
+          rw [Nat.cast_sub hs2]; norm_num
+        rw [hcast, hlog4]
+        nlinarith [hak0]
+      · simp only [Φ, R, X, if_neg hg, mul_one]
+        exact le_rfl
+    -- the label laws on the group
+    let lab : Fin (M.K (t q.1)) → Law N := fun j =>
+      if groupValid M t h' q ∧ Real.exp (-(3 / 2 : ℝ) * k * L.card) ≤ lawMassOn (D j) F
+      then restrictOrSelf (D j) F else D j
+    have hexp : (clusterLaw M t h' q).expect (fun cl =>
+        ∏ b ∈ B, (labLaw M t h' b cl).w (ω b)) =
+        ∑ j, ((if j ∈ kept then ρ.w j * lawMassOn (D j) F ^ 2 else 0) /
+          ∑ j', (if j' ∈ kept then ρ.w j' * lawMassOn (D j') F ^ 2 else 0)) *
+          ∏ b ∈ B, (lab j).w (ω b) := by
+      have hcl : clusterLaw M t h' q = FinProb.map
+          (normalizeLaw (tiltWeight M t h' q) (tiltWeight_nonneg M t h' q) hTpos)
+          (fun j => (⟨t q.1, j⟩ : ClIdx M)) := by
+        unfold clusterLaw
+        exact dif_pos ⟨hvalid q hq, hTpos⟩
+      rw [hcl, FinProb.map_expect]
+      unfold FinProb.expect normalizeLaw
+      apply Finset.sum_congr rfl
+      intro j _
+      congr 1
+      apply Finset.prod_congr rfl
+      intro b hb
+      have hbq : groupOf δ b = q := (Finset.mem_filter.mp hb).2
+      unfold labLaw
+      simp only [hbq]
+      rfl
+    have hlab : ∀ j ∈ kept, ∀ y, (lab j).w y =
+        if y ∈ F then (D j).w y / lawMassOn (D j) F else 0 := by
+      intro j hj y
+      have hcond : groupValid M t h' q ∧
+          Real.exp (-(3 / 2 : ℝ) * k * L.card) ≤ lawMassOn (D j) F :=
+        ⟨hvalid q hq, (hkept_mem j hj).1⟩
+      simp only [lab, if_pos hcond, restrictOrSelf, dif_pos (hposj j hj), Law.restrict]
+      try rfl
+    have hrlab : ∀ j, 0 < lawMassOn (D j) Fm → ∀ y, (restrictOrSelf (D j) Fm).w y =
+        if y ∈ Fm then (D j).w y / lawMassOn (D j) Fm else 0 := by
+      intro j hj y
+      simp only [restrictOrSelf, dif_pos hj, Law.restrict]
+      try rfl
+    have hratio := Lane_opus_s10_d6.group_ratio ρ D F Fm hFsub kept hposj lab
+      (fun j => restrictOrSelf (D j) Fm) hlab hrlab B ω X (2 * R) hX0 hX hTpos hR
+    have hdel : deletionRef M t h a q L c ω =
+        ∑ j, (ρ.w j * lawMassOn (D j) Fm ^ 2 /
+          ∑ j', ρ.w j' * lawMassOn (D j') Fm ^ 2) *
+          ∏ b ∈ B, (restrictOrSelf (D j) Fm).w (ω b) := by
+      simp only [deletionRef, hρdef, hDdef, hBdef, hFmdef, hmask]
+    have hLS : L ∈ (lists h q).filter (fun L => c ∈ L) :=
+      Finset.mem_filter.mpr ⟨hLlists, hcLq⟩
+    have havg := Lane_opus_s10_d6.le_card_mul_avg ((lists h q).filter fun L => c ∈ L)
+      (fun L => deletionRef M t h a q L c ω) (fun L _ => hdel_nonneg q L) hLS
+    have hdel0 := hdel_nonneg q L
+    rw [hexp]
+    calc
+      _ ≤ 2 * R * X * deletionRef M t h a q L c ω := by rw [hdel]; exact hratio
+      _ ≤ Φ q * deletionRef M t h a q L c ω := mul_le_mul_of_nonneg_right hΦ hdel0
+      _ ≤ Φ q * (cnt q * groupRef M t h a q c ω) :=
+        mul_le_mul_of_nonneg_left havg (hΦ0 q)
+      _ = Φ q * cnt q * groupRef M t h a q c ω := by ring
+  -- the list count (10:216)
+  have hpos' : h'.pos = h.pos := by rw [hh']; rfl
+  have hcnt : ∀ q ∈ incGroups (δ := δ) a, cnt q ≤ (Cc + 1) ^ (TT n δ + m) := by
+    intro q hq
+    have hcount := (hvalid q hq).1
+    have h1 : (candidates h q).card ≤ ∑ s ∈ incidentSites δ q, ∑ j : Fin ((hp n δ).H + 1),
+        p10_1kHeightPositionCount (hp n δ) (fun loc => h.pos (s.1, loc)) s.2 j := by
+      unfold candidates
+      refine Finset.card_biUnion_le.trans (Finset.sum_le_sum fun s _ => ?_)
+      refine Finset.card_biUnion_le.trans (Finset.sum_le_sum fun j _ => ?_)
+      exact Finset.card_image_le.trans (p10_1kHeightEligibleIds_card _ _ _ _).le
+    have h2 : ∀ s ∈ incidentSites δ q, ∀ j : Fin ((hp n δ).H + 1),
+        (p10_1kHeightPositionCount (hp n δ) (fun loc => h.pos (s.1, loc)) s.2 j : ℝ) ≤
+          2 * (n : ℝ) ^ 10 := by
+      intro s hs j
+      have h3 := (hcount s hs j).2
+      rw [hpos'] at h3
+      have hlam : (hp n δ).lam = (n : ℝ) ^ 10 := rfl
+      rw [hlam] at h3
+      have : (0 : ℝ) ≤ (n : ℝ) ^ 10 := by positivity
+      linarith
+    have h3 : ((incidentSites δ q).card : ℝ) ≤ (m : ℝ) + ((n : ℝ) + 1) ^ 3 := by
+      have h4 : (incidentSites δ q).card ≤ m + (n + 1) ^ 3 := by
+        unfold incidentSites
+        refine (Finset.card_filter_le _ _).trans ?_
+        refine (p10_1kProjectedNeighborEnvelope_card_le q).trans ?_
+        exact Nat.add_le_add_left (Nat.pow_le_pow_left (by omega) 3) _
+      exact_mod_cast h4
+    have hcand : ((candidates h q).card : ℝ) ≤ Cc := by
+      calc
+        ((candidates h q).card : ℝ) ≤ ∑ s ∈ incidentSites δ q, ∑ j : Fin ((hp n δ).H + 1),
+            (p10_1kHeightPositionCount (hp n δ) (fun loc => h.pos (s.1, loc)) s.2 j : ℝ) := by
+          exact_mod_cast h1
+        _ ≤ ∑ s ∈ incidentSites δ q, ∑ j : Fin ((hp n δ).H + 1), 2 * (n : ℝ) ^ 10 :=
+          Finset.sum_le_sum fun s hs => Finset.sum_le_sum fun j _ => h2 s hs j
+        _ = ((incidentSites δ q).card : ℝ) * ((((hp n δ).H : ℝ) + 1) * (2 * (n : ℝ) ^ 10)) := by
+          simp only [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
+          push_cast
+          ring
+        _ ≤ ((m : ℝ) + ((n : ℝ) + 1) ^ 3) * ((((hp n δ).H : ℝ) + 1) * (2 * (n : ℝ) ^ 10)) :=
+          mul_le_mul_of_nonneg_right h3 (by positivity)
+        _ = Cc := by rw [hCcdef]; ring
+    have hlists : (lists h q).card ≤ ((candidates h q).card + 1) ^ (TT n δ + m) := by
+      refine le_trans (Finset.card_le_card ?_)
+        (Lane_opus_s10_d6.card_powerset_filter_card_le (candidates h q) (TT n δ + m))
+      intro L hL
+      exact Finset.mem_filter.mpr ⟨(Finset.mem_filter.mp hL).1, hlist_card q L hL⟩
+    calc
+      cnt q ≤ ((lists h q).card : ℝ) := by
+        simp only [cnt]
+        exact_mod_cast Finset.card_filter_le _ _
+      _ ≤ ((((candidates h q).card + 1) ^ (TT n δ + m) : ℕ) : ℝ) := by exact_mod_cast hlists
+      _ = (((candidates h q).card : ℝ) + 1) ^ (TT n δ + m) := by push_cast; ring
+      _ ≤ (Cc + 1) ^ (TT n δ + m) :=
+        pow_le_pow_left₀ (by positivity) (by linarith) _
+  -- geometry: incident groups, star sizes, bad groups (10:214)
+  have hinc_card : (incGroups (δ := δ) a).card ≤ n :=
+    p10_1k_incidentOddGroups_card_le (mS_le n δ) a
+  have hs_sum : ∑ q ∈ incGroups (δ := δ) a, s q ≤ n := by
+    have hmaps : Set.MapsTo (groupOf δ) (starOf a : Set (OddRole n))
+        (incGroups (δ := δ) a : Set (Site n δ)) := by
+      intro b hb
+      rw [Finset.mem_coe] at hb ⊢
+      exact (p10_1k_mem_incidentOddGroups (mS_le n δ) a _).mpr
+        ⟨b, (Finset.mem_filter.mp hb).2, rfl⟩
+    have hcard := Finset.card_eq_sum_card_fiberwise hmaps
+    have hstar : (starOf a).card = n := by
+      have := p10_1kStarNeighbor_card a
+      rw [Fintype.card_subtype] at this
+      unfold starOf
+      convert this using 2
+    simp only [s]
+    rw [← hcard]
+    exact hstar.le
+  have hbad : ((incGroups (δ := δ) a).filter fun q => ¬ good q).card ≤ m + (Nat.log 2 n + 1) :=
+    Lane_opus_s10_d6.bad_groups_card_le (mS_le n δ) a
+  -- product over groups
+  have hstar : starLik M t h' a ω ≤
+      (∏ q ∈ incGroups (δ := δ) a, (Φ q * cnt q)) * refQ M t h a c ω := by
+    unfold starLik refQ
+    rw [← Finset.prod_mul_distrib]
+    apply Finset.prod_le_prod₀
+    · intro q _
+      unfold FinProb.expect
+      exact Finset.sum_nonneg fun cl _ => mul_nonneg ((clusterLaw M t h' q).nonneg cl)
+        (Finset.prod_nonneg fun b _ => (labLaw M t h' b cl).nonneg _)
+    · intro q hq
+      exact hgroup q hq
+  have hprod : (∏ q ∈ incGroups (δ := δ) a, (Φ q * cnt q)) ≤
+      Real.exp ((Real.log 2 - (6 / 100 : ℝ) * aa) * k * n) := by
+    set Λ : ℝ := ((TT n δ + m : ℕ) : ℝ) * Real.log (Cc + 1) with hΛ
+    have hCc0 : 0 ≤ Cc := by rw [hCcdef]; positivity
+    have hΛ0 : 0 ≤ Λ := mul_nonneg (Nat.cast_nonneg _) (Real.log_nonneg (by linarith))
+    have hpowΛ : (Cc + 1) ^ (TT n δ + m) = Real.exp Λ := by
+      rw [hΛ, ← Real.log_pow, Real.exp_log (by positivity)]
+    let ψ : Site n δ → ℝ := fun q =>
+      if good q then (Real.log 2 - (8 / 100 : ℝ) * aa) * k * s q else 2 * k
+    have hfac : ∀ q ∈ incGroups (δ := δ) a,
+        Φ q * cnt q ≤ Real.exp (Real.log 2 + ψ q + Λ) := by
+      intro q hq
+      have h1 : Φ q = Real.exp (Real.log 2 + ψ q) := by
+        simp only [Φ, ψ]
+        split_ifs <;> rw [Real.exp_add, Real.exp_log (by norm_num)]
+      rw [h1, Real.exp_add (_ + _), ← hpowΛ]
+      exact mul_le_mul_of_nonneg_left (hcnt q hq) (Real.exp_pos _).le
+    have hlog2 : (7 / 10 : ℝ) > Real.log 2 := by have := Real.log_two_lt_d9; linarith
+    have hlog2' : (69 / 100 : ℝ) < Real.log 2 := by have := Real.log_two_gt_d9; linarith
+    have ha1' : aa ≤ 1 / 10 := ha1
+    have hcoef : 0 ≤ (Real.log 2 - (8 / 100 : ℝ) * aa) * k :=
+      mul_nonneg (by linarith) hk0
+    have hψ : ∑ q ∈ incGroups (δ := δ) a, ψ q ≤
+        (Real.log 2 - (8 / 100 : ℝ) * aa) * k * n + 2 * k * ((m : ℝ) + ((Nat.log 2 n : ℝ) + 1)) := by
+      simp only [ψ]
+      rw [Finset.sum_ite]
+      have hA : ∑ q ∈ (incGroups (δ := δ) a).filter good,
+          (Real.log 2 - (8 / 100 : ℝ) * aa) * k * s q ≤
+          (Real.log 2 - (8 / 100 : ℝ) * aa) * k * n := by
+        rw [← Finset.mul_sum]
+        apply mul_le_mul_of_nonneg_left _ hcoef
+        calc
+          ∑ q ∈ (incGroups (δ := δ) a).filter good, (s q : ℝ) ≤
+              ∑ q ∈ incGroups (δ := δ) a, (s q : ℝ) :=
+            Finset.sum_le_sum_of_subset_of_nonneg (Finset.filter_subset _ _)
+              fun _ _ _ => Nat.cast_nonneg _
+          _ ≤ n := by exact_mod_cast hs_sum
+      have hB : ∑ q ∈ (incGroups (δ := δ) a).filter (fun q => ¬ good q), 2 * k ≤
+          2 * k * ((m : ℝ) + ((Nat.log 2 n : ℝ) + 1)) := by
+        rw [Finset.sum_const, nsmul_eq_mul]
+        have : (((incGroups (δ := δ) a).filter (fun q => ¬ good q)).card : ℝ) ≤
+            (m : ℝ) + ((Nat.log 2 n : ℝ) + 1) := by exact_mod_cast hbad
+        nlinarith [this, hk0]
+      linarith
+    have hmain' : (n : ℝ) * Real.log 2 + 2 * k * ((m : ℝ) + ((Nat.log 2 n : ℝ) + 1)) +
+        (n : ℝ) * Λ ≤ (2 / 100 : ℝ) * aa * k * n := hmain
+    have hincR : ((incGroups (δ := δ) a).card : ℝ) ≤ n := by exact_mod_cast hinc_card
+    have hsum : ∑ q ∈ incGroups (δ := δ) a, (Real.log 2 + ψ q + Λ) ≤
+        (Real.log 2 - (6 / 100 : ℝ) * aa) * k * n := by
+      have hsplit : ∑ q ∈ incGroups (δ := δ) a, (Real.log 2 + ψ q + Λ) =
+          ((incGroups (δ := δ) a).card : ℝ) * (Real.log 2 + Λ) +
+            ∑ q ∈ incGroups (δ := δ) a, ψ q := by
+        rw [Finset.sum_add_distrib, Finset.sum_add_distrib, Finset.sum_const, Finset.sum_const,
+          nsmul_eq_mul, nsmul_eq_mul]
+        ring
+      rw [hsplit]
+      have hc : ((incGroups (δ := δ) a).card : ℝ) * (Real.log 2 + Λ) ≤ n * (Real.log 2 + Λ) :=
+        mul_le_mul_of_nonneg_right hincR (by linarith)
+      linarith
+    calc
+      (∏ q ∈ incGroups (δ := δ) a, (Φ q * cnt q)) ≤
+          ∏ q ∈ incGroups (δ := δ) a, Real.exp (Real.log 2 + ψ q + Λ) :=
+        Finset.prod_le_prod₀ (fun q _ => mul_nonneg (hΦ0 q) (hcnt0 q)) hfac
+      _ = Real.exp (∑ q ∈ incGroups (δ := δ) a, (Real.log 2 + ψ q + Λ)) :=
+        (Real.exp_sum _ _).symm
+      _ ≤ Real.exp ((Real.log 2 - (6 / 100 : ℝ) * aa) * k * n) := Real.exp_le_exp.mpr hsum
+  calc
+    starLik M t h' a ω ≤ (∏ q ∈ incGroups (δ := δ) a, (Φ q * cnt q)) * refQ M t h a c ω :=
+      hstar
+    _ ≤ Real.exp ((Real.log 2 - (6 / 100 : ℝ) * aa) * k * n) * refQ M t h a c ω :=
+      mul_le_mul_of_nonneg_right hprod hrefQ_nonneg
 
 /-- **d7a** = P10.1i(i) with 10:286 (~300 lines; lemma-level from d6 and
 `p10_1i_predictive_test`). Reference-law predictive failure at one even role,

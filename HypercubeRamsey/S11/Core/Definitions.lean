@@ -5,8 +5,8 @@ import HypercubeRamsey.Tools.CubeGeometry
 /-!
 # Proposition 11.1: parameters, the slice experiment, compatibility and the outer moment
 
-Source: `refs/openai-paper/sections/11-jump-to-large-bias-only-at-linear-budget.tex` (cited `11:line`);
-blueprint `research/blueprint/PART-B.md` §3.11.  Every object is an explicit finite formula:
+Source: `sections/11-jump-to-large-bias-only-at-linear-budget.tex` (cited `11:line`).  Every object is an
+explicit finite formula:
 
 * parameters `h = ⌊n^.1⌋` (`hIn`), `k = ⌈n^.2⌉` (`kTup`), `g = n^{-.01}` (`gS`), `b_* = n^{-.95}` (`bS`),
   `s_c = ⌈e^{n^.01}⌉` (`sC`), `η = 10^{-8}` (`etaC`) (11:12–36, 11:109);

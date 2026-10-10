@@ -6,7 +6,7 @@ import HypercubeRamsey.S07.Experiment
 
 Source: `sections/09-intermediate-powers-of-bias.tex`, lines 61 (prepared mixture), 120–144 (tags and masks),
 146–294 (filters, regularity, conditional means, erasure, covariance, gain), 296–350 (predictive tests, anchor
-avoidance, odd injection, even rows); blueprint `research/blueprint/PART-B.md` §3.9, P9.2-prep … P9.2-assignC.
+avoidance, odd injection, even rows).
 
 Every object of the construction is an explicit finite formula of the prepared mixture `M`, the ID map `I`,
 the tags and the mask laws (`Setup9`):

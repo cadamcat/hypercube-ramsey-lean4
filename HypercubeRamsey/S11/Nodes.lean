@@ -3,7 +3,7 @@ import HypercubeRamsey.S11.Core
 
 /-!
 Section 11's two interfaces to the stage-level assembly. The embedding node is the frozen one-shot boundary for
-the slice, compatibility, outer-moment, avoidance, injection, and Hall construction in PART-B.md §3.11.
+the slice, compatibility, outer-moment, avoidance, injection, and Hall construction.
 -/
 
 namespace HypercubeRamsey.S11

@@ -9,7 +9,7 @@ The export `near_product_injection` and the price-witness type are unchanged.
 
 The raw baseline is commit `25c5764`, `Injection/Nodes.lean:50–219`.
 The paper source is
-`refs/openai-paper/sections/03-general-conventions-and-probabilistic-tools.tex`.
+`sections/03-general-conventions-and-probabilistic-tools.tex`.
 
 | Old node | Old assertion | Paper assertion / replacement |
 |---|---|---|

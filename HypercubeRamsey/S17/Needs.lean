@@ -6,8 +6,7 @@ import HypercubeRamsey.S17.Defs
 These certificates must be supplied by Sections 13--16. They state geometry,
 sampler provenance, finite-history, and comparison inputs, never a Section 17
 list, palette, or resampling probability conclusion. Constants `K` are fixed
-before the eventual index and all local data. The coordinator must reconcile
-these contracts with the simultaneously repaired Section 16 exports.
+before the eventual index and all local data.
 -/
 
 namespace HypercubeRamsey

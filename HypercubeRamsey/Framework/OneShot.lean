@@ -5,7 +5,7 @@ import HypercubeRamsey.S03.Stabilization
 /-!
 # Single-dimension statements and their bridge to stages
 
-Blueprint part B's conventions (`research/blueprint/PART-B.md` §1.2, §6): every embedding lemma is stated at one
+Conventions: every embedding lemma is stated at one
 dimension `(n, N, E, X, Y)` in the large regime `LargeAt`, concluding `CubeAt`; `OneShot` lemmas turn such
 statements into non-availability along a stage. One stabilization covers a fixed countable family of properties.
 -/

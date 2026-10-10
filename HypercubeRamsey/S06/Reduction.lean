@@ -10,7 +10,7 @@ colour `!G`), or the symmetric parent relation `y ≍ y'` has a broad core `S₀
 heavy support, `Π'`, the relation and the partner laws used by all later Section 6 nodes.
 
 Repair note.  The frozen `L6_1a` took `n₀ C₀` as universally quantified inputs; it was refuted with
-`n₀ = 0, C₀ = 1/4, n = 2, N = 1` (`runs/lanes/p-s06-a/REPORT.md`).  Lemma 5.1 and the heavy-support bounds need
+`n₀ = 0, C₀ = 1/4, n = 2, N = 1`.  Lemma 5.1 and the heavy-support bounds need
 `n` and `N/2^n` large, so the constants are now existential, before `∀ n N` (06:24–26).
 -/
 

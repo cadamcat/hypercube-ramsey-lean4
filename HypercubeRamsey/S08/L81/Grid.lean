@@ -8,8 +8,7 @@ import HypercubeRamsey.S03.Height.Selection
 /-!
 # Lemma 8.1, Step 1: constants, the key grid and residual cells
 
-Source: `sections/08-asymmetric-pure-patches-under-2.tex`, lines 4–6, 15–21, 126–131, 345–347, 356–361; blueprint
-`research/blueprint/PART-B.md` §3.8 (constants paragraph, L8.1a).
+Source: `sections/08-asymmetric-pure-patches-under-2.tex`, lines 4–6, 15–21, 126–131, 345–347, 356–361.
 
 The first `m = s ℓ` coordinates form `s = ⌈n^τ⌉` chunks of length `ℓ = ⌊n^{.2}⌋`; the bin of a chunk is its count of
 `true` bits (singleton bins: every Binomial(ℓ, 1/2) atom is `O(n^{-.1}) ≤ 2n^{-.04}` for large `n`, so singletons are

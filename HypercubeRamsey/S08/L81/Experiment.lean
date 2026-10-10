@@ -4,7 +4,7 @@ import HypercubeRamsey.Tools.HeavyTrunc
 /-!
 # Lemma 8.1: the staged experiment
 
-Source: `sections/08-…tex`, proof of Lemma 8.1 (lines 12–455); blueprint `research/blueprint/PART-B.md` §3.8.
+Source: `sections/08-…tex`, proof of Lemma 8.1 (lines 12–455).
 Every object of the construction is an explicit finite formula of the context `D : Ctx η₀ β p h` (the trimmed
 mixture `D.M` with tags `ι`, the colouring `D.E` in colour `D.G`, the dimension `D.n`):
 

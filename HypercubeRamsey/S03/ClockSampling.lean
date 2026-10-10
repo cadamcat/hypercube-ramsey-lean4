@@ -5,8 +5,7 @@ import HypercubeRamsey.S03.Clock.Sampler
 
 Source: `sections/03-…tex`, Lemma 3.10 (`lem:clock-sampling`, lines 771–1131). An injective sampler that also
 avoids specified local failures (predicates `F k` with scopes `sc k`) and keeps a joint upper bound
-`(1 + ε n) ∏ p̂` on at most `n^B` specified outputs. `θ₀ = 10^{-8}`. Blueprint: `research/blueprint/PART-A.md`,
-node L3.10 (the proof is replanned on a finite time mesh).
+`(1 + ε n) ∏ p̂` on at most `n^B` specified outputs. `θ₀ = 10^{-8}`.
 -/
 
 namespace HypercubeRamsey

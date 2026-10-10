@@ -9,7 +9,7 @@ namespace S18
 
 open Filter
 
-/-- C18.F / `partC_main` (PART-C.md §1.3): combine the admissible constants,
+/-- C18.F / `partC_main`: combine the admissible constants,
 profile extraction, the high-mode exports, and C18.Flow. -/
 theorem partC_main_proof (T : Stage) (η0 : ℝ) (hη0 : 0 < η0)
     (hInit : InitDisc T η0)

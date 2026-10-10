@@ -12,7 +12,7 @@ import HypercubeRamsey.S11.Core.Assignment_q_s11_even
 /-!
 # Proposition 11.1: taking the assignment, and the one-shot embedding
 
-Source: `sections/11-…tex`, lines 333–394 (P11.1d1–d3 in `research/blueprint/PART-B.md` §3.11), and the assembly
+Source: `sections/11-…tex`, lines 333–394, and the assembly
 of P11.1c (11:9–394).  The local-lemma tool is Section 7's `cond_product_bound` (Lemma 3.4 on product laws), the
 balanced-mixture tool is `balanced_mixture_sub` (Lemma 3.3), the clock tool is `clock_sampling` (Lemma 3.10), and
 the scattered-moment tool is `scattered_moments` (Lemma 3.6).

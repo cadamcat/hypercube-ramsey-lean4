@@ -6,8 +6,7 @@ import Mathlib.Analysis.Complex.ExponentialBounds
 /-!
 # Section 9: internal scales, special and residual coordinates, the ID map
 
-Source: `sections/09-intermediate-powers-of-bias.tex`, lines 32–39 (constants), 63–118 (the ID map);
-blueprint `research/blueprint/PART-B.md` §3.9, P9.2c "Internal constants".
+Source: `sections/09-intermediate-powers-of-bias.tex`, lines 32–39 (constants), 63–118 (the ID map).
 
 Every internal constant of Proposition 9.2's one-dimension core is an explicit function of the parameter record
 `P : Params9` and the dimension `n`:

@@ -12,8 +12,7 @@ set_option maxHeartbeats 1000000
 /-!
 # Proposition 9.2, core: regularity, conditional means, erasure, covariance and the gain (9.1)
 
-Source: `sections/09-intermediate-powers-of-bias.tex`, lines 146–294; blueprint `research/blueprint/PART-B.md`
-§3.9, P9.2-reg, P9.2-condmean, P9.2-erase, P9.2-cov, P9.2-gain.
+Source: `sections/09-intermediate-powers-of-bias.tex`, lines 146–294.
 
 All probabilities are over the raw experiment `rawLaw9 S I` (independent anchors and masks, tags and ID map
 fixed).  Each node produces a named fact of `Core.Experiment` with an explicit tail constant; a node consuming

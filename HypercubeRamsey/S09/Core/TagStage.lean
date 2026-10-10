@@ -6,10 +6,10 @@ import HypercubeRamsey.Framework.Minimax
 /-!
 # Proposition 9.2, core: tags and masks (P9.2-tags)
 
-Source: `sections/09-intermediate-powers-of-bias.tex`, lines 120–144; blueprint `research/blueprint/PART-B.md`
-§3.9, P9.2-tags.  Tags are drawn independently from the mixture law, one per special word; in the linear case the
-tag events `B_z` are avoided with Lemma 3.4 (`S07.cond_product_bound`); the tag loads follow from Lemma 3.6
-(`scatteredMoments_union_labels`).  Masks are chosen row by row by convex separation (`finite_minimax`).
+Source: `sections/09-intermediate-powers-of-bias.tex`, lines 120–144.  Tags are drawn independently from the
+mixture law, one per special word; in the linear case the tag events `B_z` are avoided with Lemma 3.4
+(`S07.cond_product_bound`); the tag loads follow from Lemma 3.6 (`scatteredMoments_union_labels`).  Masks are
+chosen row by row by convex separation (`finite_minimax`).
 -/
 
 namespace HypercubeRamsey

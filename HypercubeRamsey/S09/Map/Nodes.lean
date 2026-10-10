@@ -5,9 +5,8 @@ import HypercubeRamsey.S09.Map.Nodes_q_s09_map
 /-!
 # Proposition 9.2: good heights and the ID map (P9.2-map1, P9.2-map2)
 
-Source: `sections/09-intermediate-powers-of-bias.tex`, lines 63–118; blueprint `research/blueprint/PART-B.md`
-§3.9, P9.2-map1 and P9.2-map2 (thin spot TS-B3).  The ID map is built once from an outcome of the adapted height
-experiment with good heights and then fixed; it does not depend on the coloring.
+Source: `sections/09-intermediate-powers-of-bias.tex`, lines 63–118.  The ID map is built once from an outcome of
+the adapted height experiment with good heights and then fixed; it does not depend on the coloring.
 -/
 
 namespace HypercubeRamsey

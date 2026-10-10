@@ -6,7 +6,7 @@ import HypercubeRamsey.S11.Core.SliceSigmaMain_q_s11_slice
 /-!
 # Proposition 11.1: the biased menu and the slice experiment
 
-Source: `sections/11-…tex`, lines 26–89 (P11.1-menu, P11.1a, P11.1b in `research/blueprint/PART-B.md` §3.11).
+Source: `sections/11-…tex`, lines 26–89.
 -/
 
 namespace HypercubeRamsey.S11.Core

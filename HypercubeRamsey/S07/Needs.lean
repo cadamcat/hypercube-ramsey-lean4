@@ -3,8 +3,7 @@ import HypercubeRamsey.S04.Lemma41
 import HypercubeRamsey.S06.Assembly
 
 /-!
-Local copies of the consumed Section 4 and Section 6 statements. The shared
-lanes have not been merged into this worktree yet.
+Local copies of the consumed Section 4 and Section 6 statements.
 -/
 
 namespace HypercubeRamsey.S07.Needs

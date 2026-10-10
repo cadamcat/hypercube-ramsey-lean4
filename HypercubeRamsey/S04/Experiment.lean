@@ -6,9 +6,8 @@ import HypercubeRamsey.Tools.CubeGeometry
 /-!
 # Lemma 4.1 core: the staged experiment (D4.3–D4.7)
 
-Source: `sections/04-…tex`, proof of Lemma 4.1, Steps 2–7 (lines 89–598); blueprint `research/blueprint/PART-A.md`
-D4.3–D4.7.  Every object of the construction is an explicit finite formula of the input menu `M`, the patch tags
-`tag : Key → ι` and the mask profiles `q, q'`:
+Source: `sections/04-…tex`, proof of Lemma 4.1, Steps 2–7 (lines 89–598).  Every object of the construction is an
+explicit finite formula of the input menu `M`, the patch tags `tag : Key → ι` and the mask profiles `q, q'`:
 
 * the preparatory sample `Prep`: D3.8 positions, activations and ties for the height device on the even sites,
   a mask `M_{c,κ}` and a tuple `W_{c,κ}` for every center ID `c` and key `κ`, and an odd mask `M'_u` for every

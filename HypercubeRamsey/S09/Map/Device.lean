@@ -5,8 +5,7 @@ import HypercubeRamsey.S03.Height.Scale
 # Proposition 9.2: the adapted height experiment (P9.2-map1)
 
 Source: `sections/09-intermediate-powers-of-bias.tex`, lines 72–100 (the adapted height construction), with the
-path rule and scales of Lemma 3.8 (`sections/03-…tex`, lines 283–330); blueprint `research/blueprint/PART-B.md`
-§3.9, P9.2-map1 (thin spot TS-B3).
+path rule and scales of Lemma 3.8 (`sections/03-…tex`, lines 283–330).
 
 Positions are center IDs `(slice, residual location, level)`.  Independently at every position a prospective
 center is present with probability `n^{10}/V` (`V` the volume of a radius-`r` residual ball) and active with

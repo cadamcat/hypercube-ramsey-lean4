@@ -9,10 +9,9 @@ import HypercubeRamsey.S09.Core.AssignStage_q_s09_assign2
 /-!
 # Proposition 9.2, core: predictive tests, anchor avoidance, odd injection, even rows (P9.2-assignA–C)
 
-Source: `sections/09-intermediate-powers-of-bias.tex`, lines 296–350; blueprint `research/blueprint/PART-B.md`
-§3.9, P9.2-assignA, P9.2-assignB, P9.2-assignC.  Lemma 3.4 is `S07.cond_product_bound` (product form with free
-coordinates), Lemma 3.6 is `scatteredMoments_union_labels`, Lemma 3.7 is `gated_posterior`, Lemma 3.10 is
-`clock_sampling`.
+Source: `sections/09-intermediate-powers-of-bias.tex`, lines 296–350.  Lemma 3.4 is `S07.cond_product_bound`
+(product form with free coordinates), Lemma 3.6 is `scatteredMoments_union_labels`, Lemma 3.7 is `gated_posterior`,
+Lemma 3.10 is `clock_sampling`.
 -/
 
 namespace HypercubeRamsey

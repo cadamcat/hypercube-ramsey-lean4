@@ -3,8 +3,8 @@ import HypercubeRamsey.Framework.Props
 /-!
 # Vocabulary of Sections 12–18
 
-Blueprint part C §1.2–1.4 (`research/blueprint/PART-C.md`, lines 42–160). Part C's cluster witness is named
-`ClusterWitnessAt` here (part A's `ClusterWitness` is a different, unused form).
+For Sections 12–18, the cluster witness is named
+`ClusterWitnessAt` here (the earlier `ClusterWitness` is a different, unused form).
 -/
 
 namespace HypercubeRamsey

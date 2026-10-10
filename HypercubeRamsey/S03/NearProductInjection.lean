@@ -7,7 +7,7 @@ import HypercubeRamsey.S03.Injection.Nodes
 Source: `sections/03-…tex`, Lemma 3.9 (`lem:near-product-injection`, lines 586–769). Rows `i : R` carry full
 outputs `Ω i` with labels `lab i : Ω i → Fin d`; the injection assigns distinct labels, keeps every row's
 marginal exactly, and bounds joint probabilities of at most `d^{0.025}` specified outputs by the product of their
-probabilities times `exp (d^{-0.04} · #rows)`. Blueprint: `research/blueprint/PART-A.md`, node L3.9.
+probabilities times `exp (d^{-0.04} · #rows)`.
 -/
 
 namespace HypercubeRamsey

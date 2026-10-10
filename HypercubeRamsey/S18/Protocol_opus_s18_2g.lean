@@ -5,7 +5,7 @@ import HypercubeRamsey.S18.Protocol_opus_s18_2g_sol
 /-!
 # Lane opus-s18-2g: the class-ordered transfer protocol of L18.2g (TeX 18:420–453)
 
-Design (see `runs/lanes/opus-s18-2g/NOTES.md`):
+Design:
 
 * `Seed` holds, for every late row `b` of every class `j`, an independent mask draw, one sketch
   table per coordinate indexed by `SketchIndex = Config × ProcessedLabels` and one label table
@@ -13,7 +13,7 @@ Design (see `runs/lanes/opus-s18-2g/NOTES.md`):
 * `simHistory s σ` is the full (mathematical) simulation of `deletedExperiment`'s run from
   `X.state s`; predecessor sketch tables are evaluated at `blockConfig` (affected sites) or
   `X.fixed` (unaffected sites) and at predecessor-restricted labels, so the protocol evaluates the
-  *same* table entries (no index switching; sol-s18-1c NOTES).
+  *same* table entries (no index switching).
 * The protocol asks the affected calls in class order (`plan`), answers with `encodeSketch` in the
   fixed withheld list, recomputes predecessor labels from the seed and decoded replies
   (`protoLabels`), and outputs the tested prefix law at the failure row (no abort branch is needed:

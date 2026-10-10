@@ -7,8 +7,7 @@ import HypercubeRamsey.S03.ConditionalAvoidance
 # Lemma 8.1: finite-probability helpers
 
 Normalized laws with a fallback (`normOr`), conditioning with a fallback (`condOr`), and the local-lemma interface on
-a product law (`LLLInput`, `CondProductBound`, Lemma 3.4 with independent variables).  The last two have the same
-form as the Section 7 re-split (`S07/Experiment.lean` on branch `lane/opus-s07`); the coordinator may unify them.
+a product law (`LLLInput`, `CondProductBound`, Lemma 3.4 with independent variables).
 -/
 
 namespace HypercubeRamsey.S08

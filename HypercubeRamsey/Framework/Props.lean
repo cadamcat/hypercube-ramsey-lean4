@@ -3,7 +3,7 @@ import HypercubeRamsey.Framework.OneShot
 /-!
 # Tested patch properties and regime predicates
 
-Blueprint part B §1.5 (`research/blueprint/PART-B.md`, lines 174–231): the properties tested in Sections 4 and
+The properties tested in Sections 4 and
 6–11, the countable family `FamB` stabilized once, and Definition 9.1's limiting exponents as availability
 predicates.
 -/

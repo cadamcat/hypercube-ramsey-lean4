@@ -10,7 +10,7 @@ import HypercubeRamsey.Tools.Ramsey
 /-!
 # Lemma 11.3: the outer mass lower tail
 
-Source: `sections/11-…tex`, lines 164–331 (L11.3, L11.3a–g in `research/blueprint/PART-B.md` §3.11).  The
+Source: `sections/11-…tex`, lines 164–331.  The
 interaction estimates are stated for tuples whose fixed coordinates lie in the compatible support `S` (all tuple
 coordinates are drawn from `σ`, supported in `S`); every constant may depend on the tuple length `u` and is chosen
 before the dimension.

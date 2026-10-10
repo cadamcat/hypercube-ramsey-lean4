@@ -11,7 +11,7 @@ binomial probability `≤ 2n^{-.04}` with few endpoints.  Keys, signs, flippable
 defined from the layout; `ChunkGeometry6` adds the probabilistic and flip facts.
 
 Repair note.  The frozen `L6_1b` claimed a geometry with `m ≥ n^α` and at most `n^{1/2}` occupied coordinates
-for every `α > 0`; it was refuted at `α = 1/2` (`runs/lanes/p-s06-b/REPORT.md`).  The paper takes `α` small
+for every `α > 0`; it was refuted at `α = 1/2`.  The paper takes `α` small
 (06:163); `Pr(j ≥ q) ≤ n^{-.13q}` needs `α < .02` (union over `q`-subsets of chunks, atom `O(n^{-.15})`).  The
 statement now assumes `α ≤ 1/100`.  The old record also allowed singleton bins (every role boundary) and bin
 jumps of more than one; the layout now requires consecutive bins and at most `n^{.04} + 1` of them.

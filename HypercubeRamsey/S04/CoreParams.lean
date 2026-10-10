@@ -4,8 +4,7 @@ import HypercubeRamsey.S03.Height.Selection
 /-!
 # D4.1: parameters of the single-index Section 4 construction
 
-Source: `sections/04-…tex`, lines 31–36, 89–98, 170–179, 228, 400–402, 469; blueprint
-`research/blueprint/PART-A.md` D4.1.  With `ω = omega4 β γ` and `h = h4 β γ`:
+Source: `sections/04-…tex`, lines 31–36, 89–98, 170–179, 228, 400–402, 469.  With `ω = omega4 β γ` and `h = h4 β γ`:
 
 * tuple length `k = ⌈n^{ω/3}⌉`, the cap `L = n^h`, the surplus `a_* = n^{-h}`;
 * the height device (D3.8) on the even sites of `Q_n` (`d = n`), with `D = 2`, `b = ω/30`, `b₀ = b/4`,

@@ -8,8 +8,8 @@ import HypercubeRamsey.S18.Exports
 /-!
 # The top-level chain
 
-Part B's three exports (`research/blueprint/PART-B.md` §1.4) on one stabilized stage feed part C's main theorem
-(`research/blueprint/PART-C.md` §1.3); conversion lemmas translate between the two vocabularies.
+The three exports on one stabilized stage feed the main theorem of Sections 12–18;
+conversion lemmas translate between the two vocabularies.
 -/
 
 namespace HypercubeRamsey

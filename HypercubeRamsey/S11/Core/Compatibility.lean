@@ -7,10 +7,10 @@ import HypercubeRamsey.S11.Core.Compatibility_sol_s11_compatB
 /-!
 # Lemma 11.2: a compatible balanced profile
 
-Source: `sections/11-…tex`, lines 103–161 (L11.2, L11.2a–c in `research/blueprint/PART-B.md` §3.11).  The lemma is
+Source: `sections/11-…tex`, lines 103–161.  The lemma is
 stated for any menu with odd mean rows `π_i` (laws on `supp ν_i` of width `.02n`) and even mean rows `α_i`
 (subprobabilities on `supp μ_i`); the proof of Proposition 11.1 applies it to the rows of the slice experiment.
-The balance constant is `K = 16/κ`, fixed before the discard tolerance (thin spot TS-B6).
+The balance constant is `K = 16/κ`, fixed before the discard tolerance.
 -/
 
 namespace HypercubeRamsey.S11.Core

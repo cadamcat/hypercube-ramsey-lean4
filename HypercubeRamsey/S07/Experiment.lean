@@ -6,7 +6,7 @@ import HypercubeRamsey.Framework.FinProbLemmas
 /-!
 # Lemma 7.1: the staged grid experiment
 
-Source: `sections/07-…tex`, proof of Lemma 7.1 (lines 49–392); blueprint `research/blueprint/PART-B.md` §3.7.
+Source: `sections/07-…tex`, proof of Lemma 7.1 (lines 49–392).
 Every object of the construction is an explicit finite formula of the geometry `Γ`, the finite menu `M` and the
 tag profiles `Q`:
 

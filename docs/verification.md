@@ -82,15 +82,17 @@ Lean's `sInf` on `ℕ` returns `0` for the empty set, which would make the bound
 - [Bridge.lean](../HypercubeRamsey/Bridge.lean): `HypercubeRamsey.diagonalGraphRamsey_hypercube` proves that `diagonalGraphRamsey (hypercube n)` equals OpenAI's `ramseyNumber (cube n)`, defined as the infimum over positive sizes with the Ramsey property.
 - [Audit/TargetProbes.lean](../Audit/TargetProbes.lean): adjacency in `Q_2`, `2^n` vertices, `R(Q_0) = 1`, and `2 ^ n ≤ diagonalGraphRamsey (hypercube n)` for every `n`.
 - [Audit/IndependentRestatement.lean](../Audit/IndependentRestatement.lean): `FidelityProbe.Indep` restates Theorem 1.1 with Mathlib's Hamming distance, symmetric `Bool`-valued colourings of `Fin M` and injective maps, without `sInf` and without the Formal Conjectures or OpenAI definitions. `FidelityProbe.fc_iff_indep` proves it equivalent to the target. Further examples check that `0` is never a Ramsey size, that copies need not be induced, and the direction of `IsContained`.
+- [Audit/NonVacuity.lean](../Audit/NonVacuity.lean): derives from `Erdos181.erdos_181` the colouring form (there is `C > 0` such that for all `n` and `N ≥ C 2^n`, every graph on `Fin N` or its complement contains `Q_n`), shows that every admissible constant is at least `1`, and that `R(Q_n)` lies in its own Ramsey set, so the `sInf` is attained.
 
 After `lake build`, check them with:
 
 ```sh
 lake env lean Audit/TargetProbes.lean
 lake env lean Audit/IndependentRestatement.lean
+lake env lean Audit/NonVacuity.lean
 ```
 
-On 2026-10-08 both commands exited with status 0 on the `v1.0.0` sources; `FidelityProbe.fc_iff_indep` depends only on `propext`, `Classical.choice` and `Quot.sound`. They are not part of the [independent check](#independent-check-of-v100) above.
+On 2026-10-08 both commands exited with status 0 on the `v1.0.0` sources; `FidelityProbe.fc_iff_indep` depends only on `propext`, `Classical.choice` and `Quot.sound`. They are not part of the [independent check](#independent-check-of-v100) above. `Audit/NonVacuity.lean` exits with status 0 against the same proof, and each of its theorems depends only on those three axioms.
 
 To check the copies against Formal Conjectures itself:
 

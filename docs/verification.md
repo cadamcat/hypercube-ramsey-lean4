@@ -48,7 +48,7 @@ The script builds `HypercubeRamsey.Main` and runs `lake env leanchecker --fresh 
 
 ## Independent check of v1.0.0
 
-On 8 October 2026 (UTC), release `v1.0.0` (commit `ad206e1bf8240c28b538dfe72f10364cbc1591da`) was cloned from GitHub onto a new Google Cloud virtual machine (`c4d-standard-32`, 32 cores, Ubuntu 24.04.5 LTS) and checked with the steps above, in order:
+On 8 October 2026 (UTC), release `v1.0.0` (commit `ad206e1bf8240c28b538dfe72f10364cbc1591da`) was cloned from GitHub onto a new Google Cloud virtual machine (`c4d-standard-32`, 32 cores, Ubuntu 24.04.5 LTS) and checked with the steps above, in order: Commit hashes were renumbered on 10 October 2026, when local file paths were removed from older commits of the history; the files of `v1.0.0` did not change (tree `477b9a49435ac04de6df942c3a7347e15552deaa`), so this check applies to the current tag.
 
 | Step | Result |
 |---|---|

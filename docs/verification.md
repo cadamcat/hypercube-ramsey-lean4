@@ -63,6 +63,12 @@ Comparator was [`leanprover/comparator`](https://github.com/leanprover/comparato
 
 Software Heritage archived the repository with `v1.0.0` at this commit in snapshot `swh:1:snp:18d9fc2a98ef0dee8fc48803afe0e6d0e79eb3eb`.
 
+## Second kernel check of v1.0.0
+
+On 10–11 October 2026 (UTC), `v1.0.0` (commit `ad206e1bf8240c28b538dfe72f10364cbc1591da`) was cloned again from GitHub onto a 32-core Linux machine and built with the steps above; `lake update` again ended with the expected hook error and checked out all 43 packages at the revisions locked in `lake-manifest.json` (it rewrote the file's formatting, not its revisions). Comparator at `ca04cfc` then ran with [Challenge.json](../Challenge.json) and `"enable_nanoda": true`, which also replays the solution in [nanoda](https://github.com/ammkrn/nanoda_lib) (at `3a24072`), an independent type checker for Lean written in Rust, reading the export of `lean4export` at `076e8e5`. Comparator exited with status 0: the statement matches the challenge, and both nanoda and the Lean kernel accept the solution. The sandbox was again comparator's development stand-in for `landrun`. Before the run, comparator's own test suite passed on the same machine, and nanoda rejected an export that uses `sorryAx` and an export with an altered numeral.
+
+To repeat it, install nanoda (`cargo build --release` in a checkout of `nanoda_lib`), set `"enable_nanoda": true` in a copy of `Challenge.json`, and run comparator as before with `COMPARATOR_NANODA` pointing to `target/release/nanoda_bin`.
+
 ## Statement fidelity
 
 The statement is the paper's Theorem 1.1, clause by clause:

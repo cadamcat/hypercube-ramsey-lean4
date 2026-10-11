@@ -26,6 +26,8 @@ theorem erdos_181 :
 
 [Challenge.lean](Challenge.lean) holds this statement and the definitions it uses, copied from Formal Conjectures, and imports only Mathlib. [HypercubeRamsey/Main.lean](HypercubeRamsey/Main.lean) proves a theorem of the same name and statement over an identical copy of the definitions in [HypercubeRamsey/FormalConjectures.lean](HypercubeRamsey/FormalConjectures.lean). [Challenge.json](Challenge.json) configures Comparator to compare the two modules. [docs/verification.md](docs/verification.md) describes the statement checks and the differences from Formal Conjectures' files.
 
+Google DeepMind's Formal Conjectures marks `Erdos181.erdos_181` as solved and links this proof as its formal proof ([181.lean](https://github.com/google-deepmind/formal-conjectures/blob/main/FormalConjectures/ErdosProblems/181.lean), [PR #7128](https://github.com/google-deepmind/formal-conjectures/pull/7128)).
+
 ## How the proof is organized
 
 The formal proof follows the paper. OpenAI's Lean library supplies the cube graph, its Ramsey number, finite Ramsey bounds, and the paper's Lemma 2.1: if `R(Q_n) / 2^n` is unbounded, there is a sequence of red-blue colourings between two equal host sides with no monochromatic cube across the sides. This repository formalizes the rest of the paper, which shows that no such sequence exists.

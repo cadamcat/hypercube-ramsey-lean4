@@ -26,6 +26,8 @@ theorem erdos_181 :
 
 [Challenge.lean](Challenge.lean) 包含这一陈述及其所用的定义（从 Formal Conjectures 复制），只导入 Mathlib。[HypercubeRamsey/Main.lean](HypercubeRamsey/Main.lean) 证明了同名、同陈述的定理，所用定义是 [HypercubeRamsey/FormalConjectures.lean](HypercubeRamsey/FormalConjectures.lean) 中的一份相同副本。[Challenge.json](Challenge.json) 配置 Comparator 比较这两个模块。陈述的检查方法以及与 Formal Conjectures 原文件的差异见[验证说明](docs/verification.md)。
 
+Google DeepMind 的 Formal Conjectures 仓库已将 `Erdos181.erdos_181` 标记为已解决，并把本仓库的证明链接为它的形式化证明（[181.lean](https://github.com/google-deepmind/formal-conjectures/blob/main/FormalConjectures/ErdosProblems/181.lean)，[PR #7128](https://github.com/google-deepmind/formal-conjectures/pull/7128)）。
+
 ## 证明的组织
 
 形式证明遵循论文。OpenAI 的 Lean 库提供超立方体图、其 Ramsey 数、有限 Ramsey 界，以及论文的引理 2.1：若 `R(Q_n) / 2^n` 无界，则存在一列在两个等大顶点集之间的红蓝着色，跨越两侧的边中没有单色超立方体。本仓库形式化了论文的其余部分，即证明这样的序列不存在。

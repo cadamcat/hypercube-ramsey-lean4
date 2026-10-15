@@ -6,7 +6,7 @@ An absolute constant `C > 0` bounds the Ramsey number of the `n`-dimensional hyp
 
 - **Author:** Yao Xu ([@cadamcat](https://github.com/cadamcat)); see [authors and attribution](AUTHORS.md).
 - **Mathematical result:** OpenAI, [*The hypercube Ramsey number has linear order*](https://github.com/openai/math/blob/adc7f1241b42e322a6451854ab7e4b4c146bf78a/preprints/The-hypercube-Ramsey-number-has-linear-order-September-23-2026/paper.pdf), Theorem 1.1.
-- Developed with AI assistance (Claude Code, Codex and Antigravity); all proofs are verified by the Lean 4 kernel.
+- Developed with AI assistance; all proofs are verified by the Lean 4 kernel.
 
 ## Main result
 

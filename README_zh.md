@@ -6,7 +6,7 @@
 
 - **作者：** Yao Xu ([@cadamcat](https://github.com/cadamcat))；见[作者与署名说明](AUTHORS.md)。
 - **数学结果：** OpenAI，[*The hypercube Ramsey number has linear order*](https://github.com/openai/math/blob/adc7f1241b42e322a6451854ab7e4b4c146bf78a/preprints/The-hypercube-Ramsey-number-has-linear-order-September-23-2026/paper.pdf)，定理 1.1。
-- 借助 AI 辅助开发（Claude Code、Codex 和 Antigravity）；所有证明均经 Lean 4 内核验证。
+- 本项目在 AI 协助下开发；所有证明均由 Lean 4 内核验证。
 
 ## 主要结果
 
